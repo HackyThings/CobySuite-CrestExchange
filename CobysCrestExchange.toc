@@ -1,0 +1,87 @@
+## Interface: 120100
+## Title: Coby's Crest Exchange
+## Version: 0.0.1
+## Author: Cobanyte
+## Notes: A better crest exchange at Vaskarn: see what you can convert, pick an amount, and convert in a few clicks.
+## IconTexture: Interface\Icons\inv_121_crest_myth
+## AddonCompartmentFunc: CobysCrestExchange_OnAddonCompartmentClick
+## AddonCompartmentFuncOnEnter: CobysCrestExchange_OnAddonCompartmentEnter
+## AddonCompartmentFuncOnLeave: CobysCrestExchange_OnAddonCompartmentLeave
+## SavedVariables: COBYS_CREST_EXCHANGE_CONFIG, COBYS_CREST_EXCHANGE_WINDOW_STATE, COBYS_CREST_EXCHANGE_DEBUG_LOG, COBYS_CREST_EXCHANGE_DATA
+
+# Embedded CobySuite Library
+Libs\CobySuite\Source\Core.lua
+Libs\CobySuite\Build.lua
+Libs\CobySuite\Source\EventBus.lua
+Libs\CobySuite\Source\Utilities\Main.lua
+Libs\CobySuite\Source\Chat\Main.lua
+Libs\CobySuite\Source\Slash\Main.lua
+Libs\CobySuite\Source\Config\Main.lua
+Libs\CobySuite\Source\UI\Factories.lua
+Libs\CobySuite\Source\UI\Window.lua
+Libs\CobySuite\Source\UI\FilterMenu.lua
+Libs\CobySuite\Source\UI\SettingsWindow.lua
+Libs\CobySuite\Source\UI\Launcher.lua
+Libs\CobySuite\Source\UI\Guide.lua
+Libs\CobySuite\Source\Debug\Logger.lua
+Libs\CobySuite\Source\Debug\Window.lua
+
+# Core
+Source\Core.lua
+Source\EventBus.lua
+
+# Debug
+Source\Debug\Logger.lua
+Source\Debug\Window.lua
+
+# Utilities
+Source\Utilities\Main.lua
+
+# Config
+Source\Config\Main.lua
+
+# Data
+Source\Data\Seasons.lua
+Source\Data\Changelog.lua
+
+# Exchange
+Source\Exchange\Seams.lua
+Source\Exchange\Store.lua
+Source\Exchange\Currency.lua
+Source\Exchange\Inventory.lua
+Source\Exchange\Merchant.lua
+Source\Exchange\Eligibility.lua
+Source\Exchange\Gear.lua
+Source\Exchange\Observer.lua
+Source\Exchange\Quote.lua
+Source\Exchange\Plan.lua
+Source\Exchange\Ledger.lua
+Source\Exchange\Buyer.lua
+Source\Exchange\Opener.lua
+Source\Exchange\Session.lua
+
+# Diagnostics
+Source\Diagnostics\Capture.lua
+
+# Views
+Source\Views\Text.lua
+Source\Views\Window.lua
+Source\Views\Dock.lua
+Source\Views\Ladder.lua
+Source\Views\Path.lua
+Source\Views\Overview.lua
+Source\Views\SourcePicker.lua
+Source\Views\Amount.lua
+Source\Views\Plan.lua
+Source\Views\Review.lua
+Source\Views\SecureOpen.lua
+Source\Views\InteractKey.lua
+Source\Views\Progress.lua
+Source\Views\Requirements.lua
+Source\Views\BeforeYouSpend.lua
+Source\Views\Guide.lua
+Source\Views\WhatsNew.lua
+Source\Views\Launcher.lua
+
+# Settings window (after Views: kept with the windows; its buttons look up the dock and guide when pressed)
+Source\Config\Window.lua
