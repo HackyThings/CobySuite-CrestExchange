@@ -2,24 +2,25 @@
 -- CobysCrestExchange Views.Dock: where the exchange window sits, and its tab
 --
 -- At the exchange vendor the window docks to the right of Blizzard's
--- merchant window by default (the Position setting: Right, Left, Automatic
--- which tries right then left, or Where I put it). A side that doesn't fit
+-- merchant window by default (the Where it docks setting: Prefer right,
+-- Prefer left, Automatic which tries right then left, or Saved position).
+-- A side that doesn't fit
 -- on screen falls back to the other side, then to the saved spot. A known
 -- neighbor panel docked at the merchant's right edge (Crest Xmute Helper's)
 -- is stepped around by docking to that panel's right instead. Neighbors
 -- and the merchant window are only read (IsShown, GetLeft, GetRight) and
 -- hooked; nothing of theirs is moved or hidden.
 --
--- Away from the vendor, and with "Where I put it", the window uses its saved
+-- Away from the vendor, and with Saved position, the window uses its saved
 -- spot (dragging it saves it). At the vendor the dock always wins, so a drag
 -- there lasts for that visit only. The window never jumps while an exchange
 -- is under way, and when the vendor closes it stays exactly where it is on
 -- screen (FloatFree).
 --
 -- The tab: collapsing the window leaves a small tab in its place (beside the
--- vendor window at Vaskarn); clicking it expands the window again. The
--- collapsed choice is remembered (COBYS_CREST_EXCHANGE_WINDOW_STATE.
--- exchangeCollapsed), so the next visit opens as the tab.
+-- vendor window at Vaskarn); clicking it expands the window again. That is
+-- for now only: what the next visit brings up is the When visiting Vaskarn
+-- setting (Config.VendorOpening).
 -------------------------------------------------------------------------------
 
 local Views = CobysCrestExchange.Views
@@ -92,6 +93,13 @@ function Dock.FloatFree(frame)
   SetResizable(frame, true)
 end
 
+-- Whether the window has a spot of its own saved (the settings' reset button
+-- is enabled only then)
+function Dock.HasSavedSpot()
+  local state = State()
+  return state ~= nil and state.exchange ~= nil
+end
+
 function Dock.ResetPosition()
   local state = State()
   if state then state.exchange = nil end
@@ -123,18 +131,8 @@ UI.AddDynamicTooltip(tab, function(tip)
   local status = view and Views.Text and Views.Text.TabStatus(view)
   if status then tip:AddLine(status, 1, 1, 1, true) end
   tip:AddLine("Click to expand.", unpack(U.Colors.INFO_BLUE))
-end)
+end, { fillable = true })
 Dock.tab = tab
-
-function Dock.IsCollapsed()
-  local state = State()
-  return state ~= nil and state.exchangeCollapsed == true
-end
-
-function Dock.SetCollapsed(collapsed)
-  local state = State()
-  if state then state.exchangeCollapsed = collapsed and true or nil end
-end
 
 -- Show the tab: beside the vendor window at Vaskarn, else where the window's top left was
 function Dock.ShowTab(win)

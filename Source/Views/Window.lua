@@ -12,9 +12,11 @@
 -- the page the player navigated to (overview, source, plan, requirements,
 -- before, or amount when resuming). Refreshes are folded into one per frame.
 --
--- At the vendor the window opens by itself when "Show at Vaskarn" is on, and
--- Dock places it beside the merchant window. Closing the window never
--- touches an order; the session keeps watching in the background.
+-- At the vendor the window opens by itself as the "When visiting Vaskarn"
+-- setting says (the window, its small tab, or nothing), and Dock places it
+-- beside the merchant window. Collapsing and expanding change only what
+-- shows now, never that setting. Closing the window never touches an order;
+-- the session keeps watching in the background.
 -------------------------------------------------------------------------------
 
 local Views = CobysCrestExchange.Views
@@ -90,11 +92,22 @@ local function Context()
 end
 Window.Context = Context
 
+-- Why a page the player picks (Window.Go) can't show now, by PickPage's own
+-- rules: nil (it can), "receipt" (a finished exchange's receipt, which the
+-- done command dismisses) or "busy" (a review, or an exchange under way)
+local function NavBlock(view)
+  if view.state == "COMPLETE" then return "receipt" end
+  if view.state == "REVIEWING" or PROGRESS_STATES[view.state] then return "busy" end
+  if view.order and view.state ~= "SELECTING" then return "busy" end
+  return nil
+end
+
+function Window.NavBlock() return NavBlock(CobysCrestExchange.Session.View()) end
+
 local function PickPage(ctx)
   local view = ctx.view
-  if view.state == "REVIEWING" then return "review" end
-  if PROGRESS_STATES[view.state] then return "progress" end
-  if view.order and view.state ~= "SELECTING" and view.state ~= "REVIEWING" then return "progress" end
+  local block = NavBlock(view)
+  if block then return view.state == "REVIEWING" and "review" or "progress" end
   if not ctx.season then return "overview" end
   return pages[nav.page] and nav.page or "overview"
 end
@@ -134,7 +147,7 @@ end
 -------------------------------------------------------------------------------
 -- Showing
 -------------------------------------------------------------------------------
--- The full window, whatever the collapsed setting says
+-- The full window
 local function ShowFull()
   if Views.Dock then
     Views.Dock.HideTab()
@@ -146,9 +159,9 @@ local function ShowFull()
   Window.RefreshNow()
 end
 
--- As the player left it: the tab when collapsed, else the full window
-function Window.Show()
-  if Views.Dock and Views.Dock.IsCollapsed() then
+-- The full window, or with "tab" only its small tab
+function Window.Show(how)
+  if how == "tab" and Views.Dock then
     frame:Hide()
     Views.Dock.ShowTab(frame)
     return
@@ -156,19 +169,17 @@ function Window.Show()
   ShowFull()
 end
 
--- Collapse to the tab (remembered); the exchange carries on in the background
+-- Collapse to the tab for now; the exchange carries on in the background
 function Window.Collapse()
   if not Views.Dock then return end
-  Views.Dock.SetCollapsed(true)
   local autoShown = Window.autoShown
   Views.Dock.ShowTab(frame)
   frame:Hide()
   Window.autoShown = autoShown
 end
 
--- Expand from the tab (remembered)
+-- Expand from the tab
 function Window.Expand()
-  if Views.Dock then Views.Dock.SetCollapsed(false) end
   local autoShown = Window.autoShown
   ShowFull()
   Window.autoShown = autoShown
@@ -214,8 +225,9 @@ local function OnMerchant(state)
       local obs = CobysCrestExchange.Observer.Current()
       if not (obs.merchant and obs.merchant.isExchange) then return end
       local tabShown = Views.Dock and Views.Dock.TabShown()
-      if Config.Get(Config.Options.SHOW_PANEL_AT_VENDOR) ~= false and obs.season and not frame:IsShown() and not tabShown then
-        Window.Show()
+      local how = obs.season and Config.VendorOpening(Config.Get(Config.Options.VENDOR_OPEN), frame:IsShown(), tabShown)
+      if how then
+        Window.Show(how)
         Window.autoShown = true
       elseif frame:IsShown() and Views.Dock then
         Views.Dock.Place(frame)

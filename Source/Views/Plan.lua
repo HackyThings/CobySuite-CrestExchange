@@ -1,8 +1,9 @@
 -------------------------------------------------------------------------------
 -- CobysCrestExchange Views.Plan: "I want X more Myth" from several tiers
 --
--- Type how many crests of the target to receive (or Max). The ladder below
--- previews the whole plan live as you type: each tier's balance before and
+-- Type how many crests of the target to receive (or Max). Once you press
+-- Enter or leave the box, the ladder below previews the whole plan: each
+-- tier's balance before and
 -- after, the target glowing, and each step's trade with dots flowing up it
 -- ("Step 1: 6 packs, 180 Champion to 60 Hero"). Each tier below the target
 -- has a Spend checkbox: checked, the plan may spend the crests you have
@@ -61,6 +62,7 @@ local function Build(host)
     parse = function(text) local n = tonumber(text); return n and n == math.floor(n) and n or nil end,
     validate = function(n) return n >= 1 and n <= 100000 end,
     onCommit = function(n) SetCrests(n) end })
+  page.Input:SetNumeric(true)   -- digits only
   page.Unit = host:CreateFontString(nil, "OVERLAY", U.Fonts.BODY)
   page.Unit:SetPoint("LEFT", page.Input, "RIGHT", 8, 0)
   page.Max = UI.CreateButton(host, { text = "Max", size = { 50, 22 }, point = { "TOPRIGHT", host, "TOPRIGHT", -4, -30 },
@@ -69,7 +71,7 @@ local function Build(host)
     local plan = page.plan
     tip:AddLine("Max: " .. (plan and T.Count(plan.maxCrests) or "?"))
     if plan and plan.limiter then tip:AddLine("Limited by: " .. T.PlanLimiter(plan, page.season, page.away, page.obs), 1, 1, 1, true) end
-  end)
+  end, { fillable = true })
   page.Round = CreateFrame("Frame", nil, host)
   page.Round:SetPoint("TOPLEFT", 6, -56)
   page.Round:SetSize(300, 22)

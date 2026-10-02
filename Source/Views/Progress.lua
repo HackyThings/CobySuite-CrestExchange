@@ -25,6 +25,7 @@ local Window = Views.Window
 local T = Views.Text
 local UI = CobySuite_CobysCrestExchange.UI
 local U = CobySuite_CobysCrestExchange.Utilities
+local WHITE = U.Colors.HIGHLIGHT_WHITE
 local Seasons = CobysCrestExchange.Seasons
 local E = CobysCrestExchange.Events
 
@@ -32,9 +33,10 @@ local function Command(cmd, arg) CobysCrestExchange.EventBus:Fire(E.SessionComma
 
 local discardPopup = UI.CreateDialogPopup({
   name = "CobysCrestExchangeDiscardPopup",
+  icon = CobysCrestExchange.ICON,
   title = "Discard this order?",
   danger = true,
-  body = "The rest of this exchange won't be bought. Packs and crests you already have stay in your bags.",
+  body = "The rest of this exchange won't be bought. Packs in your bags and crests you already have stay yours.",
   confirmText = "Discard", cancelText = "Keep",
   width = 360, height = 150, hidden = true,
   onConfirm = function() Command("discard") end,
@@ -72,7 +74,7 @@ local function Build(host)
   page.StepBar.Text:SetPoint("CENTER")
   local font, size = page.StepBar.Text:GetFont()
   if font then page.StepBar.Text:SetFont(font, size, "OUTLINE") end
-  page.StepBar.Text:SetTextColor(1, 1, 1)
+  page.StepBar.Text:SetTextColor(WHITE[1], WHITE[2], WHITE[3])
   page.StepBar:Hide()
   page.Figures = CreateFrame("Frame", nil, host)
   page.Figures:SetPoint("TOPLEFT", 0, -36)
@@ -102,15 +104,20 @@ local function Build(host)
     function() Command("continue") end)
   page.Leave = Button(host, "End exchange here", 190, { "BOTTOMLEFT", host, "BOTTOMLEFT", 0, 44 },
     function() Command("leave_rest") end)
-  UI.AddDynamicTooltip(page.Leave, function(tip)
-    if page.planActive then
+  -- Disabled while a pack opens: its tooltip still says why
+  page.Leave:SetMotionScriptsWhileDisabled(true)
+  UI.AddDynamicTooltip(page.Leave, function(tip, button)
+    if not button:IsEnabled() then
+      tip:AddLine(page.planActive and "End plan here" or "End exchange here")
+      tip:AddLine("Wait for the pack to finish opening.", 1, 1, 1, true)
+    elseif page.planActive then
       tip:AddLine("End plan here")
       tip:AddLine("Ends this plan without buying its remaining steps. Unopened packs stay in your bags.", 1, 1, 1, true)
     else
       tip:AddLine("End exchange here")
       tip:AddLine("Ends this exchange without buying any more packs. Unopened packs stay in your bags.", 1, 1, 1, true)
     end
-  end)
+  end, { fillable = true })
   page.OpenPurchased = Button(host, "Open purchased packs", 170, { "BOTTOMLEFT", host, "BOTTOMLEFT", 0, 44 },
     function() Command("open_purchased") end)
   page.ReviewRemaining = Button(host, "Review remaining", 150, { "BOTTOMRIGHT", host, "BOTTOMRIGHT", 0, 44 },
@@ -124,11 +131,11 @@ local function Build(host)
   UI.AddDynamicTooltip(page.CheckAgain, function(tip)
     tip:AddLine("Check again")
     tip:AddLine("Reads your bags and crests now. Only reads: nothing is bought.", 1, 1, 1, true)
-  end)
+  end, { fillable = true })
   UI.AddDynamicTooltip(page.CopyDetails, function(tip)
     tip:AddLine("Copy details")
-    tip:AddLine("A plain-text report of your crests, packs and this exchange, to paste where someone can help.", 1, 1, 1, true)
-  end)
+    tip:AddLine("A plain-text report of your crests, packs and this exchange. It opens selected: press Ctrl+C to copy it, then paste it where someone can help.", 1, 1, 1, true)
+  end, { fillable = true })
   page.Another = Button(host, "Choose another exchange", 190, { "BOTTOMLEFT", host, "BOTTOMLEFT", 0, 4 },
     function() Command("done"); Window.Go("overview") end)
   page.Close = Button(host, "Close", 90, { "BOTTOMRIGHT", host, "BOTTOMRIGHT", 0, 4 },
@@ -203,10 +210,16 @@ local function Opening(page, ctx, view)
   local notice = T.Notice(view.notice, view.reason)
   if notice then msg = notice .. "\n" .. (msg or "") end
   page.Message:SetText(msg or "")
+  -- The last refused press, only while that refusal still holds: one from an
+  -- earlier pack or exchange never lingers (run 2026-10-01: "Wait for the last
+  -- pack" stayed up beside a ready Open next pack)
   local lastRefusal = Views.SecureOpen.button and Views.SecureOpen.button.lastRefusal
-  page.OpenHint:SetText(lastRefusal and T.OpenBlock(lastRefusal) or "")
+  local mayOpen, why = CobysCrestExchange.Session.MayOpen()
+  page.OpenHint:SetText(lastRefusal and not mayOpen and why == lastRefusal and T.OpenBlock(lastRefusal) or "")
   page.planActive = view.plan ~= nil
   page.Leave:SetText(view.plan and "End plan here" or "End exchange here")
+  -- Ending waits for an open in flight (and its loot) to settle
+  page.Leave:SetEnabled(view.state == "READY_TO_OPEN")
   Only(page, page.Leave)
 end
 
@@ -227,8 +240,11 @@ local function Paused(page, ctx, view)
   if sum.missingPacks > 0 then
     lines[#lines + 1] = string.format("%s from this order aren't in your bags any more; they aren't bought again.", T.Packs(sum.missingPacks))
   end
-  page.Message:SetText(table.concat(lines, "\n"))
   local canReview = sum.notBoughtPacks > 0 and ctx.obs.merchant and ctx.obs.merchant.isExchange
+  if sum.notBoughtPacks > 0 and not canReview then
+    lines[#lines + 1] = "Talk to Vaskarn again to review and buy the rest."
+  end
+  page.Message:SetText(table.concat(lines, "\n"))
   Only(page, (view.openQuota or 0) > 0 and page.OpenPurchased or nil, canReview and page.ReviewRemaining or nil, page.Discard)
 end
 
@@ -251,24 +267,59 @@ local function Uncertain(page, ctx, view)
   Only(page, page.CheckAgain, page.CopyDetails, page.Discard)
 end
 
+-- A plan's receipt: each tier's net change over all its steps (the target
+-- first), so crests made on the way and spent again cancel out
+local function PlanReceiptRows(s, r)
+  local t = r.plan.totals or { spent = {}, received = {} }
+  local target = r.plan.target
+  local function Net(key) return (t.received[key] or 0) - (t.spent[key] or 0) end
+  local gained, spent = {}, {}
+  if Net(target) > 0 then gained[1] = T.Crests(s, target, Net(target)) end
+  for _, tier in ipairs(s.tiers) do
+    local n = Net(tier.key)
+    if n < 0 then spent[#spent + 1] = T.Crests(s, tier.key, -n)
+    elseif n > 0 and tier.key ~= target then gained[#gained + 1] = T.Crests(s, tier.key, n) end
+  end
+  local rows = { { "Received", #gained > 0 and table.concat(gained, ", ") or T.Count(0) } }
+  if #spent > 0 then rows[#rows + 1] = { "Spent", table.concat(spent, ", ") } end
+  rows[#rows + 1] = { "Packs left unopened", T.Count(r.unopened or 0) }
+  return rows
+end
+
 local function Done(page, ctx, view)
   local r = view.receipt
   local s = ctx.season
   local left = r and r.outcome == "left"
-  page.Title:SetText(left and (r.plan and "Plan ended" or "Exchange ended") or "Exchange complete")
-  if r and r.order then
+  local opening = r and not r.plan and r.order and r.order.kind == "open_existing"
+  local title
+  if r and r.plan then
+    title = string.format("%s: %s more %s", left and "Plan ended" or "Plan complete", T.Count(r.plan.crests), T.Tier(s, r.plan.target))
+  elseif opening then
+    title = left and "Opening ended" or "Packs opened"
+  else
+    title = left and "Exchange ended" or "Exchange complete"
+  end
+  page.Title:SetText(title)
+  if r and r.plan then
+    SetRows(page, PlanReceiptRows(s, r))
+  elseif r and r.order then
     local product = Seasons.ProductByKey(s, r.order.key)
-    SetRows(page, {
-      { "Spent", T.Crests(s, product.from, r.ledger.spent) },
-      { "Received", T.Crests(s, product.to, r.ledger.received) },
-      { "Packs left unopened", T.Count(math.max(0, (r.order.kind == "open_existing" and r.ledger.openQuota or r.ledger.purchased) - r.ledger.opened)) },
-    })
+    local rows = {}
+    -- Opening packs you had spends nothing
+    if not opening then rows[1] = { "Spent", T.Crests(s, product.from, r.ledger.spent) } end
+    rows[#rows + 1] = { "Received", T.Crests(s, product.to, r.ledger.received) }
+    rows[#rows + 1] = { "Packs left unopened", T.Count(r.unopened or 0) }
+    SetRows(page, rows)
   else
     SetRows(page, {})
   end
-  page.Message:SetText(left and (r.plan
-    and "This plan ended here; its remaining steps weren't bought. Unopened packs stay in your bags."
-    or "This exchange ended here; nothing more was bought. Unopened packs stay in your bags.") or "")
+  local message = ""
+  if left then
+    message = r.plan and "This plan ended here; its remaining steps weren't bought. Unopened packs stay in your bags."
+      or opening and "Opening ended here. Unopened packs stay in your bags."
+      or "This exchange ended here; nothing more was bought. Unopened packs stay in your bags."
+  end
+  page.Message:SetText(message)
   Only(page, page.Another, page.Close)
 end
 
@@ -314,9 +365,19 @@ local function Next(page, ctx, view)
   elseif ctx.obs.inCombat then
     msg = T.StepBlocked("combat")
   elseif not atVendor then
-    local key = Views.InteractKey and Views.InteractKey.Name()
-    msg = key and string.format("Walk up to Vaskarn and press %s to talk to him, then the same key buys the next step.", key)
-      or (T.StepBlocked("merchant_closed") .. " With a key bound to Interact with target, one key does every step.")
+    local IK = Views.InteractKey
+    local key = IK and IK.Name()
+    local target = key and not IK.TalkReady() and ", target him" or ""
+    if key and IK.KeyState() == "modified" then
+      -- A key with a modifier is never bound to the button: it only talks
+      msg = string.format("Walk up to Vaskarn%s and press %s to talk to him, then click the button below to buy the next step.", target, key)
+    elseif key then
+      msg = string.format("Walk up to Vaskarn%s and press %s to talk to him, then the same key buys the next step.", target, key)
+    elseif IK and IK.KeyState() ~= "none" then
+      msg = T.StepBlocked("merchant_closed") .. " Then use the button below."   -- the key setting is off
+    else
+      msg = T.StepBlocked("merchant_closed") .. " With a key bound to Interact with target, one key does every step."
+    end
   elseif view.reason and view.reason ~= "restored" and view.reason ~= "merchant_closed" and view.reason ~= "combat" then
     msg = T.StepBlocked(view.reason)
   else
@@ -407,9 +468,10 @@ function page:Refresh(ctx)
   end
   local opening = mode == "opening" or mode == "next" or (mode == "done" and not view.plan)
   self.Open:SetShown(opening)
-  -- The text never runs under the button: it ends above the hint line
+  -- The text never runs under the button: it ends above the hint line, which
+  -- only opening shows
   if opening then
-    self.Message:SetPoint("BOTTOM", self.Open, "TOP", 0, 22)
+    self.Message:SetPoint("BOTTOM", self.Open, "TOP", 0, mode == "opening" and 22 or 6)
   elseif mode == "uncertain" then
     self.Message:SetPoint("BOTTOM", self.CheckAgain, "TOP", 0, 6)
   end

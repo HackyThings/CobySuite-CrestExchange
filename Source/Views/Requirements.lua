@@ -21,7 +21,25 @@ local Seasons = CobysCrestExchange.Seasons
 local Eligibility = CobysCrestExchange.Eligibility
 
 local MAX_LINES = 22
-local MAX_SLOTS = 8
+local SLOT_ROWS = 7   -- the slot table shows seven, lowest first; the rest scroll
+local SLOT_ROW_H = 18
+local TABLE_MARK = "\0slots"   -- where the slot table goes among the reason lines
+
+-- Each watermark slot's own paper doll icon (C_PaperDollInfo.GetInventorySlotInfo)
+local SLOT_ICON_NAMES = {
+  Head = "HeadSlot", Neck = "NeckSlot", Shoulder = "ShoulderSlot", Cloak = "BackSlot", Chest = "ChestSlot",
+  Wrist = "WristSlot", Hand = "HandsSlot", Waist = "WaistSlot", Legs = "LegsSlot", Feet = "FeetSlot",
+  Finger = "Finger0Slot", Trinket = "Trinket0Slot", Weapons = "MainHandSlot",
+}
+local slotIcons = {}
+local function SlotIcon(slot)
+  if slotIcons[slot] == nil then
+    local name = SLOT_ICON_NAMES[slot]
+    local ok, _, texture = pcall(C_PaperDollInfo.GetInventorySlotInfo, name)
+    slotIcons[slot] = name and ok and texture or false
+  end
+  return slotIcons[slot] or 134400
+end
 local LIST_ROWS = 8
 local ROW_H = 24
 local LIST_TOP = -50
@@ -52,34 +70,36 @@ local function StateIcon(result)
   return nil
 end
 
-local function AchievementLines(lines, r)
+local function AchievementLines(lines, r, out)
   if r.completed and not r.earnedByMe then
     lines[#lines + 1] = string.format("%s is done on another character; this trade needs it on this one.", tostring(r.name))
   else
     lines[#lines + 1] = string.format("Needs the achievement %s on this character.", U.WrapColor(U.Colors.STATUS_GOLD, tostring(r.name)))
   end
   lines[#lines + 1] = string.format("Every gear slot must have reached item level %d at some point. Average item level doesn't count.", r.threshold)
-  lines[#lines + 1] = ""
-  lines[#lines + 1] = "Slot                          Yours   Needs"
-  local shown = 0
+  -- The slots go in the table (lowest first, as Watermarks sorts them), the
+  -- weapons as one row: the best set reached, as the unlock counts it
+  local slots = {}
   for _, row in ipairs(r.watermarks or {}) do
-    if shown < MAX_SLOTS and not row.weapon then
-      local value = row.char and tostring(row.char) or "?"
-      local color = row.ok and U.Colors.SUCCESS_GREEN or U.Colors.WARNING_RED
-      lines[#lines + 1] = string.format("%-28s %s   %d", T.Slot(row.slot), U.WrapColor(color, value), r.threshold)
-      shown = shown + 1
+    if not row.weapon then
+      slots[#slots + 1] = { slot = row.slot, label = T.Slot(row.slot), yours = row.char, needs = r.threshold, ok = row.ok }
     end
   end
   if r.weaponsOk ~= nil then
-    lines[#lines + 1] = "Weapons: " .. (r.weaponsOk and U.WrapColor(U.Colors.SUCCESS_GREEN, "high enough")
-      or U.WrapColor(U.Colors.WARNING_RED, "below " .. r.threshold))
+    slots[#slots + 1] = { slot = "Weapons", label = "Weapons", yours = r.weapons and r.weapons.char, needs = r.threshold,
+      ok = r.weaponsOk }
+  end
+  if #slots > 0 then
+    out.slots = slots
+    lines[#lines + 1] = TABLE_MARK
   end
   for _, text in ipairs(r.criteria or {}) do
     lines[#lines + 1] = "  - " .. text
   end
 end
 
-local function ReasonLines(season, product, result)
+-- The reason's lines, and out.slots for the slot table (TABLE_MARK marks its place)
+local function ReasonLines(result, out)
   local lines = {}
   if result.state == "available" then
     lines[#lines + 1] = "This trade is open."
@@ -87,7 +107,7 @@ local function ReasonLines(season, product, result)
   end
   for _, r in ipairs(result.reasons) do
     if r.kind == "achievement" then
-      AchievementLines(lines, r)
+      AchievementLines(lines, r, out)
     elseif r.kind == "practicum" then
       if r.have and r.need then
         lines[#lines + 1] = string.format("Trading down needs Vaskarn's quest Upgrade Practicum. Progress: %d / %d.", r.have, r.need)
@@ -128,6 +148,25 @@ local function Build(host)
   page.Body:SetPoint("TOPRIGHT", -6, -50)
   page.Body:SetJustifyH("LEFT")
   page.Body:SetSpacing(2)
+  -- Each slot's highest item level against the unlock's, on the shared table
+  local green, red = U.Colors.SUCCESS_GREEN, U.Colors.WARNING_RED
+  local function Level(n) return n and T.Count(n) or "?" end
+  page.Slots = UI.CreateSortTable(host, {
+    pool = SLOT_ROWS, rowHeight = SLOT_ROW_H, minStretch = 120,
+    columns = {
+      { key = "slot", label = "Slot", stretch = true, sortable = false,
+        icon = function(row) return SlotIcon(row.slot) end, text = function(row) return row.label end },
+      { key = "yours", label = "Yours", width = 64, justify = "RIGHT", sortable = false,
+        tooltip = "The highest item level this slot has reached on this character",
+        text = function(row) return Level(row.yours) end, color = function(row) return row.ok and green or red end },
+      { key = "needs", label = "Needs", width = 64, justify = "RIGHT", sortable = false,
+        text = function(row) return Level(row.needs) end },
+    },
+  })
+  page.Slots.frame:Hide()
+  page.After = host:CreateFontString(nil, "OVERLAY", U.Fonts.BODY)
+  page.After:SetJustifyH("LEFT")
+  page.After:SetSpacing(2)
   page.ListButtons = {}
   page.GroupHeads = {}
   for i = 1, 2 do
@@ -172,7 +211,7 @@ local function Build(host)
   page.ListNote = host:CreateFontString(nil, "OVERLAY", U.Fonts.SMALL)
   page.ListNote:SetJustifyH("LEFT")
   page.ListNote:SetSpacing(2)
-  page.ListNote:SetTextColor(0.7, 0.7, 0.7)
+  page.ListNote:SetTextColor(U.Colors.LABEL_GRAY[1], U.Colors.LABEL_GRAY[2], U.Colors.LABEL_GRAY[3])
   page.Back = UI.CreateButton(host, { text = "Back", size = { 90, 22 }, point = { "BOTTOMLEFT", host, "BOTTOMLEFT", 0, 4 },
     onClick = function()
       local nav = Window.nav
@@ -200,9 +239,36 @@ function page:Refresh(ctx)
   local result = Eligibility.ForTrade(season, product, ctx.obs)
   self.Title:SetText(TradeName(season, product))
   self.Status:SetText(StateLine(result))
-  local lines = ReasonLines(season, product, result)
+  local out = {}
+  local lines = ReasonLines(result, out)
   while #lines > MAX_LINES do table.remove(lines) end
-  self.Body:SetText(table.concat(lines, "\n"))
+  -- The lines before the slot table in Body, the rest under it in After
+  local before, after, mark = {}, {}, false
+  for _, line in ipairs(lines) do
+    if line == TABLE_MARK then mark = true
+    elseif mark then
+      if #after > 0 or line ~= "" then after[#after + 1] = line end   -- the table's own gap replaces a blank line
+    else before[#before + 1] = line end
+  end
+  self.Body:SetText(table.concat(before, "\n"))
+  local shown = mark and out.slots ~= nil
+  self.Slots.frame:SetShown(shown)
+  local above = self.Body
+  if shown then
+    self.Slots.frame:ClearAllPoints()
+    self.Slots.frame:SetPoint("TOPLEFT", self.Body, "BOTTOMLEFT", -2, -8)
+    self.Slots.frame:SetPoint("RIGHT", self.frame, "RIGHT", 0, 0)
+    -- As tall as its rows, up to SLOT_ROWS (the header is 20 and a gap of 2;
+    -- 2 more so pixel rounding never drops the last row: run 2 showed 6 of 7)
+    self.Slots.frame:SetHeight(24 + math.min(#out.slots, SLOT_ROWS) * SLOT_ROW_H)
+    self.Slots:SetRows(out.slots)
+    above = self.Slots.frame
+  end
+  self.After:ClearAllPoints()
+  self.After:SetPoint("TOPLEFT", above, "BOTTOMLEFT", shown and 2 or 0, -8)
+  self.After:SetPoint("RIGHT", self.frame, "RIGHT", -6, 0)
+  self.After:SetText(table.concat(after, "\n"))
+  self.After:Show()
 end
 
 -- Every trade, trade up first then trade down, each group under its own heading
@@ -213,6 +279,8 @@ function page:RefreshList(ctx)
   self.Title:SetText("Trades and what unlocks them")
   self.Status:SetText(U.WrapColor(U.Colors.LABEL_GRAY, "Click a trade to see exactly what it needs."))
   self.Body:SetText("")
+  self.Slots.frame:Hide()
+  self.After:Hide()
   local all = Eligibility.All(season, ctx.obs)
   local y, used = LIST_TOP, 0
   for g, group in ipairs(GROUPS) do
@@ -263,7 +331,7 @@ end
 -- with what exactly is missing (the overview's ladder links use both)
 -------------------------------------------------------------------------------
 local TIP_SLOTS = 4
-local RED, WHITE, GRAY = U.Colors.WARNING_RED, { 1, 1, 1 }, { 0.6, 0.6, 0.6 }
+local RED, WHITE, GRAY = U.Colors.WARNING_RED, U.Colors.HIGHLIGHT_WHITE, { 0.6, 0.6, 0.6 }
 
 local function Line(tip, text, c) tip:AddLine(text, c[1], c[2], c[3], true) end
 

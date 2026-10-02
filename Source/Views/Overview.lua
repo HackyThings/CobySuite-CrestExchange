@@ -14,6 +14,7 @@ local Window = Views.Window
 local T = Views.Text
 local UI = CobySuite_CobysCrestExchange.UI
 local U = CobySuite_CobysCrestExchange.Utilities
+local GOLD = U.Colors.STATUS_GOLD
 local Currency = CobysCrestExchange.Currency
 local Eligibility = CobysCrestExchange.Eligibility
 local E = CobysCrestExchange.Events
@@ -56,7 +57,7 @@ local function BuildBanner(host, page)
   local banner = CreateFrame("Frame", nil, host, "BackdropTemplate")
   banner:SetBackdrop(U.Backdrops.CONTENT)
   banner:SetBackdropColor(0.15, 0.12, 0.02, 0.9)
-  banner:SetBackdropBorderColor(1, 0.82, 0, 0.8)
+  banner:SetBackdropBorderColor(GOLD[1], GOLD[2], GOLD[3], 0.8)
   banner:SetHeight(34)
   banner.Icon = banner:CreateTexture(nil, "ARTWORK")
   banner.Icon:SetSize(24, 24)
@@ -85,7 +86,7 @@ local function Build(host)
   page.Hint:SetText("Click a tier to get more")
   page.ladder = Views.Ladder.Create(host, { top = -28, nodeH = 40, gap = 16, onClick = OnTile })
   for _, node in ipairs(page.ladder.nodes) do
-    UI.AddDynamicTooltip(node, function(tip, self) TileTooltip(tip, self.tierKey) end)
+    UI.AddDynamicTooltip(node, function(tip, self) TileTooltip(tip, self.tierKey) end, { fillable = true })
   end
   BuildBanner(host, page)
   page.banner:SetPoint("TOPLEFT", page.ladder.frame, "BOTTOMLEFT", 0, -6)
@@ -115,22 +116,35 @@ local function TileSub(t)
   return table.concat(parts, "  |cff888888|||r  ")
 end
 
+-- One pack's price, as the quotes take it: Vaskarn's live offer, else the
+-- last one seen at him; nil when he was never visited
+local function PackPrice(ctx, key)
+  local m = ctx.obs.merchant
+  local live = m and m.isExchange and m.offers and m.offers[key]
+  if live then return live.costPerUnit, live.yieldPerUnit end
+  for _, entry in ipairs(ctx.obs.lastSeen and ctx.obs.lastSeen.list or {}) do
+    if entry.key == key then return entry.costPerUnit, entry.yieldPerUnit end
+  end
+end
+
 -- The trade up into each tier: open, locked, or unknown away from the vendor.
--- A locked one says why in red, and its hover says what exactly is missing;
--- a click opens the trade's requirements
+-- It reads "Trade up 30 for 10" (one pack's cost and crests) at Vaskarn and
+-- away alike, or "Trade up" before his prices were ever seen. A locked one
+-- says why in red, and its hover says what exactly is missing; a click opens
+-- the trade's requirements
 local function LinkFor(ctx, product)
   local season = ctx.season
   local result = Eligibility.ForTrade(season, product, ctx.obs)
-  local offer = ctx.obs.merchant and ctx.obs.merchant.offers and ctx.obs.merchant.offers[product.key]
-  local rate = offer and (offer.costPerUnit .. " for " .. offer.yieldPerUnit) or "3 for 1"
+  local cost, yield = PackPrice(ctx, product.key)
+  local name = cost and yield and string.format("Trade up %s for %s", T.Count(cost), T.Count(yield)) or "Trade up"
   if result.state == "locked" then
     return { state = "locked",
-      label = U.WrapColor(U.Colors.LABEL_GRAY, "Trade up " .. rate .. ":  ")
+      label = U.WrapColor(U.Colors.LABEL_GRAY, name .. ":  ")
         .. U.WrapColor(U.Colors.WARNING_RED, Views.Requirements.ShortReason(result)),
       tooltip = function(tip) Views.Requirements.AddTooltip(tip, season, product, result) end,
       onClick = function() Window.Go("requirements", { reqKey = product.key, from = "overview" }) end }
   end
-  return { state = "idle", label = U.WrapColor(U.Colors.LABEL_GRAY, "Trade up " .. rate) }
+  return { state = "idle", label = U.WrapColor(U.Colors.LABEL_GRAY, name) }
 end
 
 local function Model(ctx)

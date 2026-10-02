@@ -4,13 +4,15 @@
 -- The player says how many they want ("I want [20] more Myth": minus and plus
 -- step by a pack, Max fills in the most any route allows, and an amount
 -- between packs offers the two pack amounts around it). Every way of getting
--- that tier is then priced for exactly that amount:
+-- that tier is then priced for exactly that amount (until an amount is
+-- typed the routes show greyed and can't be chosen; a locked one still opens
+-- its requirements):
 --   * trade up from the tier below      "Spend 60 Hero (2 packs)"
 --   * trade down from the tier above
 --   * a plan using every lower tier     "Spends 30 Hero, 90 Champion in 2 steps"
 -- A route that can't reach the amount says why, and a locked trade opens its
--- requirements when clicked. A route that works is chosen for you (trading
--- up first) and highlighted; clicking another chooses it. Under the routes, a small path
+-- requirements when clicked. A route that works is chosen for you (the plan
+-- first, then a trade up) and highlighted; clicking another chooses it. Under the routes, a small path
 -- shows the chosen one tier by tier. Review goes to the review page; Adjust
 -- on the plan opens the full ladder with its Spend boxes. Unopened packs of
 -- this tier are offered first.
@@ -21,6 +23,7 @@ local Window = Views.Window
 local T = Views.Text
 local UI = CobySuite_CobysCrestExchange.UI
 local U = CobySuite_CobysCrestExchange.Utilities
+local GOLD = U.Colors.STATUS_GOLD
 local Seasons = CobysCrestExchange.Seasons
 local Seams = CobysCrestExchange.Seams
 local Eligibility = CobysCrestExchange.Eligibility
@@ -171,8 +174,9 @@ local function RouteWhy(r, page)
   return r.line
 end
 
--- Trades up first, then the plan (also trading up), and a trade down last:
--- most players want to trade up, and a trade down gives up a higher tier
+-- Listed trades up first, then the plan (also trading up), and a trade down
+-- last, since a trade down gives up a higher tier; the plan is chosen first
+-- when it works (Choose)
 local function Routes(ctx, tierKey)
   local list, downs = {}, {}
   for _, product in ipairs(Seasons.TradesInto(ctx.season, tierKey)) do
@@ -185,17 +189,10 @@ local function Routes(ctx, tierKey)
   return list
 end
 
--- The chosen route: the player's while it works, else the first that does,
--- else (no amount yet, or one nothing reaches) the open route that gives most
--- A trade down is never chosen for you: only your own click picks it
+-- The chosen route (Plan.ChooseRoute): the player's while it works, else the
+-- plan, else a trade up; never a trade down
 local function Choose(routes)
-  for _, r in ipairs(routes) do if r.key == S.route and r.open and (r.ok or not S.crests) then return r end end
-  for _, r in ipairs(routes) do if r.ok and not r.down then return r end end
-  local best
-  for _, r in ipairs(routes) do
-    if r.open and not r.down and (not best or (r.max or 0) > (best.max or 0)) then best = r end
-  end
-  return best
+  return Plan.ChooseRoute(routes, S.route, S.crests ~= nil)
 end
 
 -- Why nothing can be made into a tier: its cap first (it stops every route),
@@ -312,6 +309,7 @@ local function BuildAmount(host, page)
     parse = function(text) local n = tonumber(text); return n and n == math.floor(n) and n or nil end,
     validate = function(n) return n >= 1 and n <= 100000 end,
     onCommit = function(n) SetCrests(n) end })
+  page.Input:SetNumeric(true)   -- digits only: no letters, signs or decimal points
   page.Unit = host:CreateFontString(nil, "OVERLAY", U.Fonts.BODY)
   page.Unit:SetPoint("LEFT", page.Input, "RIGHT", 8, 0)
   page.Max = UI.CreateButton(host, { text = "Max", size = { 46, 22 }, point = { "TOPRIGHT", host, "TOPRIGHT", -2, -42 },
@@ -328,7 +326,7 @@ local function BuildAmount(host, page)
     for _, route in ipairs(page.routes or {}) do
       tip:AddLine(route.title .. ": " .. (route.open and (RouteWhy(route, page) or "") or (route.line or "")), 1, 0.6, 0.3, true)
     end
-  end)
+  end, { fillable = true })
   page.Plus = UI.CreateButton(host, { text = "+", size = { 24, 22 }, point = { "RIGHT", page.Max, "LEFT", -6, 0 },
     onClick = function() Step(page, 1) end })
   page.Minus = UI.CreateButton(host, { text = "-", size = { 24, 22 }, point = { "RIGHT", page.Plus, "LEFT", -2, 0 },
@@ -364,7 +362,7 @@ local function BuildTile(host)
   tile.Glow = tile:CreateTexture(nil, "BACKGROUND", nil, 1)
   tile.Glow:SetPoint("TOPLEFT", 3, -3)
   tile.Glow:SetPoint("BOTTOMRIGHT", -3, 3)
-  tile.Glow:SetColorTexture(1, 0.82, 0, 0.10)
+  tile.Glow:SetColorTexture(GOLD[1], GOLD[2], GOLD[3], 0.10)
   tile.Icon = tile:CreateTexture(nil, "ARTWORK")
   tile.Icon:SetSize(30, 30)
   tile.Icon:SetPoint("LEFT", 8, 0)
@@ -388,7 +386,7 @@ local function BuildTile(host)
   UI.AddDynamicTooltip(tile.Adjust, function(tip)
     tip:AddLine("Adjust the plan")
     tip:AddLine("Choose which tiers it may spend, with every step shown on the ladder.", 1, 1, 1, true)
-  end)
+  end, { fillable = true })
   UI.AddHoverHighlight(tile)
   tile:HookScript("OnEnter", function(self)
     if not self.Line:IsTruncated() then return end
@@ -406,12 +404,15 @@ local function BuildExisting(host, page)
   local existing = CreateFrame("Frame", nil, host, "BackdropTemplate")
   existing:SetBackdrop(U.Backdrops.CONTENT)
   existing:SetBackdropColor(0.15, 0.12, 0.02, 0.9)
-  existing:SetBackdropBorderColor(1, 0.82, 0, 0.8)
+  existing:SetBackdropBorderColor(GOLD[1], GOLD[2], GOLD[3], 0.8)
   existing:SetHeight(28)
+  -- Two lines at most beside the button (large counts wrap)
   existing.Text = existing:CreateFontString(nil, "OVERLAY", U.Fonts.SMALL)
-  existing.Text:SetPoint("LEFT", 8, 0)
-  existing.Text:SetPoint("RIGHT", -104, 0)
+  existing.Text:SetPoint("TOPLEFT", 8, -2)
+  existing.Text:SetPoint("BOTTOMRIGHT", -104, 2)
   existing.Text:SetJustifyH("LEFT")
+  existing.Text:SetJustifyV("MIDDLE")
+  existing.Text:SetMaxLines(2)
   existing.Button = UI.CreateButton(existing, { text = "Open packs", size = { 94, 20 },
     point = { "RIGHT", existing, "RIGHT", -4, 0 },
     onClick = function()
@@ -438,7 +439,7 @@ local function Build(host)
   page.SummaryHover = CreateFrame("Frame", nil, host)
   page.SummaryHover:SetAllPoints(page.Summary)
   page.SummaryHover:EnableMouse(false)
-  UI.AddDynamicTooltip(page.SummaryHover, function(tip) tip:AddLine(page.Summary:GetText() or "", 1, 1, 1, true) end)
+  UI.AddDynamicTooltip(page.SummaryHover, function(tip) tip:AddLine(page.Summary:GetText() or "", 1, 1, 1, true) end, { fillable = true })
   page.Summary:SetJustifyH("LEFT")
   page.Summary:SetSpacing(2)
   page.Back = UI.CreateButton(host, { text = "Back", size = { 90, 22 }, point = { "BOTTOMLEFT", host, "BOTTOMLEFT", 0, 4 },
@@ -455,13 +456,15 @@ end
 -------------------------------------------------------------------------------
 -- Refreshing
 -------------------------------------------------------------------------------
-local function FillTile(tile, route, chosen)
+-- waiting: no amount typed yet, so an open route is greyed and can't be
+-- chosen (a locked one still opens its requirements)
+local function FillTile(tile, route, chosen, waiting)
   tile.route = route
   tile.Icon:SetTexture(route.icon)
   tile.Title:SetText(route.title)
   local line = route.line or ""
   if route.open and not route.ok and (S.crests or route.blocked) then line = U.WrapColor(U.Colors.CAUTION_ORANGE, line) end
-  if not route.open then line = U.WrapColor(U.Colors.LABEL_GRAY, line) end
+  if not route.open or waiting then line = U.WrapColor(U.Colors.LABEL_GRAY, line) end
   tile.Line:SetText(line)
   local selected = chosen == route
   tile.Glow:SetShown(selected)
@@ -473,14 +476,18 @@ local function FillTile(tile, route, chosen)
   else
     tile.Badge:Hide()
   end
-  tile:SetAlpha(route.open and 1 or 0.55)
-  tile.Icon:SetDesaturated(not route.open)
+  local inert = waiting and route.open
+  tile:SetEnabled(not inert)
+  tile:SetAlpha((route.open and not inert) and 1 or 0.55)
+  tile.Icon:SetDesaturated(not route.open or inert)
   -- A trade down is marked in orange, chosen or not
   local orange = U.Colors.CAUTION_ORANGE
-  if route.down and route.open then
+  if inert then
+    tile:SetBackdropBorderColor(0.35, 0.35, 0.35, 0.8)
+  elseif route.down and route.open then
     tile:SetBackdropBorderColor(orange[1], orange[2], orange[3], selected and 1 or 0.7)
   elseif selected then
-    tile:SetBackdropBorderColor(1, 0.82, 0, 1)
+    tile:SetBackdropBorderColor(GOLD[1], GOLD[2], GOLD[3], 1)
   else
     tile:SetBackdropBorderColor(0.35, 0.35, 0.35, 0.8)
   end
@@ -521,7 +528,7 @@ local function RefreshExisting(page, ctx, tierKey, y)
     for _, product in ipairs(Seasons.TradesInto(ctx.season, tierKey)) do
       if (ctx.obs.packs[product.key] or 0) > 0 then existing.productKey = product.key end
     end
-    existing.Text:SetText(string.format("You have %s (%s crests) unopened. Open these first.", T.Packs(t.packs), T.Count(t.packedCrests)))
+    existing.Text:SetText(string.format("%s (%s) unopened. Open them first.", T.Packs(t.packs), T.Crests(ctx.season, tierKey, t.packedCrests)))
   end
   existing:SetShown(existing.productKey ~= nil)
   if not existing:IsShown() then return y end
@@ -551,10 +558,15 @@ local function SummaryText(page, ctx, tierKey, chosen, room)
     end
     return table.concat(lines, "\n")
   end
-  if not chosen then
+  local anyOpen = false
+  for _, r in ipairs(page.routes or {}) do if r.open then anyOpen = true end end
+  if not anyOpen then
     lines[#lines + 1] = "No trade into this tier is open to you yet. Click a locked one to see what it needs."
   elseif not S.crests then
-    lines[#lines + 1] = string.format("Type how many you want, or press Max (up to %s now).", T.Crests(ctx.season, tierKey, page.best or 0))
+    lines[#lines + 1] = string.format("Type how many you want, or press Max (up to %s now). The ways to get them light up once you do.",
+      T.Crests(ctx.season, tierKey, page.best or 0))
+  elseif not chosen then
+    lines[#lines + 1] = "Only a trade down is open: click it if you want to give up a higher tier for this one."
   elseif chosen.ok and chosen.kind == "plan" then
     -- Every step spelled out, in the order the presses come, as far as the room allows
     local steps = chosen.plan.steps
@@ -575,7 +587,7 @@ local function SummaryText(page, ctx, tierKey, chosen, room)
     end
   elseif chosen.ok then
     lines[#lines + 1] = string.format(Seasons.CAPABILITIES.openAtVendor and "Then open %s with one press each."
-      or "Then open %s with one press each, once you step away from Vaskarn.", T.Packs(chosen.quote.packs))
+      or "Then close Vaskarn's window and open %s with one press each.", T.Packs(chosen.quote.packs))
   end
   local openOnly = chosen and chosen.ok and chosen.kind == "plan" and Plan.OpenOnly(chosen.plan)
   if not openOnly and not (ctx.obs.merchant and ctx.obs.merchant.isExchange) then lines[#lines + 1] = "Visit Vaskarn to exchange." end
@@ -606,7 +618,9 @@ function page:Refresh(ctx)
   self.Sub:SetText(string.format("You have %s.  Room: %s.", T.Count(t and t.currency.ok and t.currency.quantity or nil),
     t and (t.room.kind == "none" and "no cap" or T.Count(t.room.raw)) or "?"))
   local routes = Routes(ctx, tierKey)
-  local chosen = Choose(routes)
+  -- Nothing is chosen, highlighted or drawn until an amount is typed
+  local waiting = S.crests == nil
+  local chosen = not waiting and Choose(routes) or nil
   self.chosen = chosen
   local y = -74 - RefreshAmount(self, ctx, tierKey, routes, chosen)
   y = RefreshExisting(self, ctx, tierKey, y)
@@ -617,7 +631,7 @@ function page:Refresh(ctx)
       tile:ClearAllPoints()
       tile:SetPoint("TOPLEFT", self.frame, "TOPLEFT", 0, y)
       tile:SetPoint("TOPRIGHT", self.frame, "TOPRIGHT", 0, y)
-      FillTile(tile, route, chosen)
+      FillTile(tile, route, chosen, waiting)
       y = y - TILE_H
     end
   end

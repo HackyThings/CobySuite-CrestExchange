@@ -19,8 +19,10 @@
 --     plan stops waiting, and at logout; a change you make during the wait
 --     stands and is never overwritten.
 -- Only out of combat (bindings and this CVar can't change in combat lockdown;
--- PLAYER_REGEN_ENABLED syncs again). The setting "Use my Interact key"
--- (default on) turns all of it off.
+-- PLAYER_REGEN_ENABLED syncs again). Two settings, both on by default (split
+-- 2026-10-01, Task #53): "Press the exchange button with my Interact key"
+-- turns all of it off; "Turn on Enable Interact Key for the walk back" turns
+-- off only the CVar hold. InteractKey.Decide is the rule, Sync applies it.
 -------------------------------------------------------------------------------
 
 local Views = CobysCrestExchange.Views
@@ -37,6 +39,11 @@ local bound   -- the key our override binding is on, or nil
 local function Enabled()
   local Config = CobysCrestExchange.Config
   return Config.Get(Config.Options.USE_INTERACT_KEY) ~= false
+end
+
+local function HoldAllowed()
+  local Config = CobysCrestExchange.Config
+  return Config.Get(Config.Options.HOLD_INTERACT_SETTING) ~= false
 end
 
 -- The player's Interact key, or nil when none is bound
@@ -64,6 +71,15 @@ end
 -- The name only when the key really clicks the button (bound and plain)
 function InteractKey.ClickName()
   return bound and GetBindingText(bound, 1) or nil
+end
+
+-- The player's Interact key for the settings card: "none", "modified" (it
+-- has Shift, Ctrl, Alt or Meta, so it can't click the button) or "ok", and
+-- the key's short name
+function InteractKey.KeyState()
+  local key = InteractKey.Key()
+  if not key then return "none" end
+  return Plain(key) and "ok" or "modified", GetBindingText(key, 1)
 end
 
 -- Whether the key is clicking the one button right now
@@ -121,17 +137,46 @@ local function Apply(want)
   bound = want
 end
 
+-- The rule (pure): on and hold are the two settings, key the player's
+-- Interact key (or nil), action the one button's next action (or nil while
+-- it isn't showing). Returns the key our override binding should be on (or
+-- nil), and whether Enable Interact Key should be held on now.
+function InteractKey.Decide(on, hold, key, action)
+  local want = on and key and Plain(key) and action and CLICK_MODES[action.mode] and action.enabled and key or nil
+  local holdNow = (on and hold and action ~= nil and action.mode == "talk") and true or false
+  return want, holdNow
+end
+
+-- Whether Enable Interact Key is, or will be, on while a plan waits for
+-- Vaskarn: the player has it on already, or the hold is allowed and the
+-- player hasn't changed it themselves during this wait (then no new hold is
+-- taken until the wait ends: see CVAR_UPDATE below). TalkRule is the rule
+-- alone, for the Interact suite on any client.
+function InteractKey.TalkRule(settingOn, holdAllowed, declinedNow)
+  return settingOn and true or (holdAllowed and not declinedNow) and true or false
+end
+
+function InteractKey.TalkReady()
+  local on = ANY ~= nil and tonumber(GetCVar("softTargetInteract")) == ANY
+  return InteractKey.TalkRule(on, HoldAllowed(), declined)
+end
+
 -- What the key should do now, from the one button's next action
 function InteractKey.Sync()
   if InCombatLockdown() then return end
   local button = _G[BUTTON]
   local Session = CobysCrestExchange.Session
+  -- A Verify scene shows sample state: the key keeps its own job
+  if Session and Session.SceneLocked and Session.SceneLocked() then
+    Apply(nil)
+    HoldSoftInteract(false)
+    return
+  end
   local action = button and button:IsVisible() and Session and Session.NextAction() or nil
   local on = Enabled()
-  local key = on and InteractKey.Key()
-  local want = key and Plain(key) and action and CLICK_MODES[action.mode] and action.enabled and key or nil
+  local want, holdNow = InteractKey.Decide(on, HoldAllowed(), on and InteractKey.Key() or nil, action)
   Apply(want)
-  HoldSoftInteract(on and action ~= nil and action.mode == "talk")
+  HoldSoftInteract(holdNow)
 end
 
 owner:RegisterEvent("PLAYER_REGEN_DISABLED")
@@ -149,6 +194,8 @@ owner:SetScript("OnEvent", function(_, event, name)
       and state and state.softInteractPrev ~= nil then
       state.softInteractPrev = nil
       declined = true
+      -- The talk prompts now ask for a target (TalkReady)
+      if Views.Window then Views.Window.Refresh() end
     end
     return
   end
@@ -183,6 +230,8 @@ end
 -- hold really writes and gives back; the player's own value is put back last.
 InteractKey._test = {
   Plain = Plain,
+  -- The Interact suite: a decline as the CVAR_UPDATE branch records it
+  SetDeclined = function(value) declined = value and true or false end,
   Exercise = function()
     local key = InteractKey.Key()
     local state = State()

@@ -16,6 +16,7 @@ local Path = {}
 Views.Path = Path
 
 local U = CobySuite_CobysCrestExchange.Utilities
+local GOLD = U.Colors.STATUS_GOLD
 
 local STOPS = 5
 local ICON = 28
@@ -45,7 +46,7 @@ local function BuildArrow(frame, i)
   arrow.Line:SetHeight(2)
   arrow.Line:SetPoint("LEFT")
   arrow.Line:SetPoint("RIGHT", -6, 0)
-  arrow.Line:SetColorTexture(1, 0.82, 0, 0.7)
+  arrow.Line:SetColorTexture(GOLD[1], GOLD[2], GOLD[3], 0.7)
   arrow.Head = arrow:CreateTexture(nil, "OVERLAY")
   arrow.Head:SetAtlas("NPE_ArrowUp")
   arrow.Head:SetRotation(-math.pi / 2)
@@ -101,7 +102,7 @@ function Path:Render(season, stops)
     stop.Name:SetText(U.WrapColor(hex, Views.Text.TierLabel(season, data.tierKey)))
     stop.Text:SetText(data.text or "")
     local c = data.color
-    if c then stop.Text:SetTextColor(c[1], c[2], c[3]) else stop.Text:SetTextColor(0.8, 0.8, 0.8) end
+    if c then stop.Text:SetTextColor(c[1], c[2], c[3]) else stop.Text:SetTextColor(U.Colors.LIGHT_GRAY[1], U.Colors.LIGHT_GRAY[2], U.Colors.LIGHT_GRAY[3]) end
     if i < n then
       local arrow = self.arrows[i]
       arrow:ClearAllPoints()

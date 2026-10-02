@@ -49,6 +49,7 @@ local Observer = CobysCrestExchange.Observer
 local E = CobysCrestExchange.Events
 
 local BUY_WATCHDOG = 10
+local REFUSAL_WINDOW = 1.5   -- seconds after sending in which a UI error counts as its refusal
 local OPEN_WATCHDOG = 6
 local BUY_REREAD = 1
 local SETTLE_OPEN = 1.5
@@ -75,6 +76,25 @@ local S = NewState()
 -- Plumbing
 -------------------------------------------------------------------------------
 local function Log(fmt, ...) CobysCrestExchange.Debug.Log("SESSION", fmt, ...) end
+
+-- The order's two tiers as the game shows them now, for the debug log
+-- (Cobanyte, 2026-10-01: log what each step read, not only the states):
+-- "veteran 40 (room 760, 0 in packs), adventurer 10 (room 790, 30 in packs), 3 down-adventurer in bags"
+local function Snapshot(obs, order)
+  if not (order and obs and obs.tiers) then return "no reading" end
+  local parts = {}
+  for _, id in ipairs({ order.sourceCurrencyID or false, order.destCurrencyID or false }) do
+    for key, t in pairs(obs.tiers) do
+      if id and t.tier and t.tier.currencyID == id then
+        local c, raw = t.currency, t.room and t.room.raw
+        parts[#parts + 1] = string.format("%s %s (room %s, %d in packs)", key, c and c.ok and tostring(c.quantity) or "?",
+          raw == math.huge and "no cap" or tostring(raw), t.packedCrests or 0)
+      end
+    end
+  end
+  parts[#parts + 1] = string.format("%d %s in bags", obs.packs and obs.packs[order.key] or 0, tostring(order.key))
+  return table.concat(parts, ", ")
+end
 
 local function CancelTimer(name)
   local t = S.timers[name]
@@ -113,6 +133,7 @@ end
 function Session.View()
   local obs = Observer.Current()
   local view = {
+    scene = S.scene,
     state = S.state, order = S.order, ledger = S.ledger, notice = S.notice, reason = S.reason,
     needsPress = S.needsPress, advisorOnly = S.advisorOnly, auto = S.auto, stopRequested = S.stopRequested,
     receipt = S.receipt, uncertainKind = S.uncertainKind,
@@ -195,12 +216,28 @@ end
 
 local StartPlanStep   -- defined with the other plan functions below
 
+-- A plan's running totals (saved with it): crests spent and received per
+-- tier, and packs left unopened, across every step that has ended
+local function AddStepTotals(plan, order, ledger)
+  local t = plan.totals or { spent = {}, received = {}, unopened = 0 }
+  plan.totals = t
+  local season = Observer.Current().season
+  local product = season and Seasons.ProductByKey(season, order.key)
+  if product then
+    if order.kind ~= "open_existing" then t.spent[product.from] = (t.spent[product.from] or 0) + ledger.spent end
+    t.received[product.to] = (t.received[product.to] or 0) + ledger.received
+  end
+  t.unopened = t.unopened + Ledger.OpenQuota(order, ledger)
+end
+
 local function Complete(outcome)
   StopAuto()
   CancelAllTimers()
   local plan = S.plan
   if S.order then
-    S.receipt = { order = S.order, ledger = S.ledger, outcome = outcome, plan = plan }
+    if plan then AddStepTotals(plan, S.order, S.ledger) end
+    S.receipt = { order = S.order, ledger = S.ledger, outcome = outcome, plan = plan,
+      unopened = plan and plan.totals.unopened or Ledger.OpenQuota(S.order, S.ledger) }
     Store.ClearOrder(plan and outcome == "done" and "step" or outcome)
   end
   S.order, S.ledger, S.frozenQuote = nil, nil, nil
@@ -260,6 +297,8 @@ end
 local function BeginOpen()
   local obs = Observer.Current()
   S.openBase = Opener.Baseline(S.order, obs)
+  Log("Opening one %s pack (%d opened, %d left to open): %s", S.order.key, S.ledger.opened or 0,
+    Ledger.OpenQuota(S.order, S.ledger), Snapshot(obs, S.order))
   -- saved with the ledger (Enter persists), so a reload mid-open is uncertain, not forgotten
   S.ledger.openAttempt = { packs = S.openBase.packs, dest = S.openBase.dest }
   Enter(ST.WAITING_FOR_OPEN)
@@ -267,7 +306,7 @@ local function BeginOpen()
 end
 
 AutoStepNow = function()
-  if not S.auto or S.state ~= ST.READY_TO_OPEN then return end
+  if not S.auto or S.state ~= ST.READY_TO_OPEN or S.scene == "shown" then return end
   local obs = Fresh()
   local sent, why = Opener.AutoStep(S.order, S.ledger, obs)
   if sent then
@@ -289,6 +328,9 @@ end
 local function FinishOpen(crests, notice)
   CancelTimer("open"); CancelTimer("settle")
   Ledger.RecordOpen(S.ledger, math.max(0, crests or 0))
+  Log("Opened one %s pack: +%d crests (a pack gives %d)%s; %d opened, %d left to open: %s", S.order.key, crests or 0,
+    S.order.yield or 0, notice and (", " .. notice) or "", S.ledger.opened or 0, Ledger.OpenQuota(S.order, S.ledger),
+    Snapshot(Observer.Current(), S.order))
   ClearOpen()
   if Ledger.OpenQuota(S.order, S.ledger) <= 0 then return NothingToOpen() end
   Enter(ST.READY_TO_OPEN, notice)
@@ -310,6 +352,7 @@ function Session._OnOpenWatchdog()
   if dp >= 1 then return FinishOpen(dd, dd ~= S.order.yield and "open_odd" or nil) end
   StopAuto()
   CancelTimer("settle")
+  Log("The open had no effect after %ds: %s", OPEN_WATCHDOG, Snapshot(obs, S.order))
   ClearOpen()
   Enter(ST.READY_TO_OPEN, "open_no_effect")
 end
@@ -355,9 +398,10 @@ local function Resolve(result, dp, ds, obs)
   if result == "complete" then
     Ledger.ResolveBought(S.ledger, dp, ds)
     S.refusal, S.blocked = nil, false
-    Log("Bought %d (%d spent), %d of %d", dp, ds, S.ledger.purchased, S.order.approvedPacks)
+    Log("Bought %d (%d spent), %d of %d: %s", dp, ds, S.ledger.purchased, S.order.approvedPacks, Snapshot(obs, S.order))
     return AfterPurchase(obs)
   end
+  Log("Purchase %s: %d packs arrived, %d crests left: %s", result, dp or 0, ds or 0, Snapshot(obs, S.order))
   S.uncertainKind = "buy"
   Enter(ST.UNCERTAIN, nil, "buy_" .. result)
 end
@@ -376,6 +420,7 @@ function Session._OnBuyWatchdog()
     end
     local reason = S.blocked and "blocked" or "refused"
     local message = S.refusal
+    Log("Nothing was bought: %s%s", reason, message and (" (" .. tostring(message) .. ")") or "")
     S.refusal, S.blocked = nil, false
     return Pause(reason, message)
   end
@@ -405,12 +450,14 @@ local function RereadPurchase()
 end
 
 Step = function()
-  if S.state ~= ST.BUYING or not S.order then return end
+  if S.state ~= ST.BUYING or not S.order or S.scene == "shown" then return end
   if S.stopRequested then return Pause("stopped") end
   local obs = Fresh()
   local chunk, why = Buyer.NextChunk(S.order, S.ledger, obs, Session.Unsettled(obs))
   if not chunk then
     if why == "done" then return ToOpening() end
+    Log("Not buying more of %s: %s; %d of %d bought: %s", S.order.key, tostring(why), S.ledger.purchased or 0,
+      S.order.approvedPacks or 0, Snapshot(obs, S.order))
     return Pause(why)
   end
   Ledger.BeginAttempt(S.ledger, chunk.qty, chunk.base, Seams.Call("Now"))
@@ -418,8 +465,10 @@ Step = function()
   -- by itself (a restored attempt's saved totals may be stale)
   S.liveAttempt = S.ledger.attempt
   S.refusal, S.blocked = nil, false
+  S.sentAt = Seams.Call("Now")
   Enter(ST.WAITING_FOR_PURCHASE)
-  Log("Buying %d of %s (index %d)", chunk.qty, S.order.key, chunk.index)
+  Log("Buying %d of %s (merchant index %d, %d crests a pack, %d still to buy): %s", chunk.qty, S.order.key, chunk.index,
+    S.order.cost or 0, Ledger.Remaining(S.order, S.ledger), Snapshot(obs, S.order))
   StartTimer("buy", BUY_WATCHDOG, function() Session._OnBuyWatchdog() end)
   RereadPurchase()
   Buyer.Send(chunk.index, chunk.qty)
@@ -460,7 +509,8 @@ local function Approve(fingerprint, autoOpen)
   end
   S.frozenQuote = nil
   S.needsPress, S.stopRequested = false, false
-  Log("Approved %s: %d packs for %d", S.order.key, S.order.approvedPacks, q.spend)
+  Log("Approved %s: %d packs for %d (%d a pack, keep at least %d, limited by %s): %s", S.order.key, S.order.approvedPacks,
+    q.spend, S.order.cost or 0, S.order.reserve or 0, tostring(q.limiter), Snapshot(obs, S.order))
   Enter(ST.BUYING)
   Step()
 end
@@ -508,6 +558,7 @@ StartPlanStep = function()
       end
       S.plan = nil
       Store.ClearPlan()
+      S.receipt = { outcome = "done", plan = plan, unopened = plan.totals and plan.totals.unopened or 0 }
       return Enter(ST.COMPLETE, nil, "done")
     end
     S.order.planStep = plan.index
@@ -522,6 +573,13 @@ StartPlanStep = function()
   if q.status ~= "ok" or q.planning then
     return Enter(ST.NEXT_STEP, nil, q.limiter or q.status)
   end
+  -- The step buys only on the terms the player approved: a changed price,
+  -- yield or pack count stops it (Discard and plan again)
+  if q.cost ~= step.cost or q.yield ~= step.yield or q.packs ~= step.packs then
+    Log("Plan step %d refused: %s x%s at %s for %s now, approved x%s at %s for %s", plan.index, step.key,
+      tostring(q.packs), tostring(q.cost), tostring(q.yield), tostring(step.packs), tostring(step.cost), tostring(step.yield))
+    return Enter(ST.NEXT_STEP, nil, "offer_changed")
+  end
   S.order = Ledger.NewOrder(q, { now = Seams.Call("Time") or 0, season = obs.season and obs.season.key,
     npcID = obs.merchant.npcID, destCurrencyID = DestCurrency(obs, q.product), autoOpen = plan.autoOpen })
   S.order.planStep = plan.index
@@ -534,6 +592,9 @@ end
 
 local function RequestPlanReview(plan)
   if S.state ~= ST.SELECTING or S.order or type(plan) ~= "table" or plan.status ~= "ok" or plan.planning then return end
+  -- A Store that can't save (a newer build's data) can't record an attempt
+  -- before a purchase, so nothing is reviewed
+  if Store.IsReadOnly() then return end
   local obs = Observer.Current()
   if obs.inCombat then return end
   -- A plan that only opens your own packs buys nothing: no vendor, no buying checks
@@ -541,7 +602,7 @@ local function RequestPlanReview(plan)
     if S.advisorOnly or not Seasons.CAPABILITIES.buyFromAddon then return end
     if not (obs.merchant and obs.merchant.isExchange) then return end
   end
-  S.frozenPlan = plan
+  S.frozenQuote, S.frozenPlan = nil, plan
   Enter(ST.REVIEWING)
 end
 
@@ -568,15 +629,25 @@ ApprovePlan = function(fingerprint, autoOpen)
   S.plan = { target = frozen.target, crests = frozen.crests, steps = steps, index = 1, keep = keep,
     autoOpen = autoOpen == true and Seasons.CAPABILITIES.autoOpenAfterClose }
   Log("Plan approved: %d more %s in %d steps", frozen.crests, frozen.target, #steps)
+  for i, st in ipairs(steps) do
+    Log("  step %d: %s %s x%d (%s)", i, st.kind or "trade", tostring(st.key), st.packs or 0,
+      st.kind == "open" and "opens packs you have" or string.format("spends %d %s", st.spend or 0, tostring(st.from)))
+  end
   StartPlanStep()
 end
 
+-- A review given up by an interruption drops whichever review it was, a
+-- trade's or a plan's
+local function AbandonReview() S.frozenQuote, S.frozenPlan = nil, nil end
+
 local function RequestReview(q)
   if S.state ~= ST.SELECTING or type(q) ~= "table" or q.status ~= "ok" or q.planning then return end
+  if Store.IsReadOnly() then return end
   local obs = Observer.Current()
   if obs.inCombat or S.advisorOnly or not Seasons.CAPABILITIES.buyFromAddon then return end
   if not (obs.merchant and obs.merchant.isExchange) then return end
-  S.frozenQuote = q
+  -- A plan review left behind by an interruption never answers for this one
+  S.frozenQuote, S.frozenPlan = q, nil
   Enter(ST.REVIEWING)
 end
 
@@ -693,13 +764,13 @@ local function OnObservations(obs)
   if S.state == ST.WAITING_FOR_PURCHASE then return OnBuyObservation(obs) end
   if S.state == ST.WAITING_FOR_OPEN then return OnOpenObservation(obs) end
   if S.state == ST.UNCERTAIN then return SettleUncertain(obs, false) end
-  if S.state == ST.REVIEWING and obs.inCombat then S.frozenQuote = nil; return Enter(ST.SELECTING, "changed") end
+  if S.state == ST.REVIEWING and obs.inCombat then AbandonReview(); return Enter(ST.SELECTING, "changed") end
 end
 
 local function OnMerchantChanged(state)
   if state == "other" and S.auto then StopAuto() end
   if state == "closed" or state == "other" then
-    if S.state == ST.REVIEWING then S.frozenQuote = nil; return Enter(ST.SELECTING, "changed") end
+    if S.state == ST.REVIEWING then AbandonReview(); return Enter(ST.SELECTING, "changed") end
     if S.state == ST.BUYING then return Pause("merchant_closed") end
     if S.state == ST.WAITING_FOR_PURCHASE then S.stopRequested = true; return end
     if S.state == ST.READY_TO_OPEN and state == "closed" and S.order and S.order.autoOpen
@@ -714,7 +785,14 @@ local function OnMerchantChanged(state)
   end
 end
 
+-- What a shown Verify scene ignores: everything a press or a key could send
+local SCENE_REFUSES = {
+  [E.SelectionChanged] = true, [E.ReviewRequested] = true, [E.PlanReviewRequested] = true,
+  [E.PurchaseApproved] = true, [E.SessionCommand] = true, [E.OpenAttempted] = true,
+}
+
 function Session:ReceiveEvent(event, a, b)
+  if S.scene == "shown" and SCENE_REFUSES[event] then return end
   if event == E.ObservationsChanged then return OnObservations(a) end
   if event == E.SelectionChanged then return OnSelection(a) end
   if event == E.ReviewRequested then return RequestReview(a) end
@@ -762,7 +840,12 @@ function Session.OnGameEvent(event, a, b)
     end
   elseif event == "UI_ERROR_MESSAGE" then
     local message = not Seams.IsSecret(b) and b or nil
-    if S.state == ST.WAITING_FOR_PURCHASE then S.refusal = message end
+    -- Only an error right after the purchase was sent is its refusal: one
+    -- later in the wait (another action's) must not resolve the attempt
+    local now = Seams.Call("Now")
+    if S.state == ST.WAITING_FOR_PURCHASE and S.sentAt and now and now - S.sentAt <= REFUSAL_WINDOW then
+      S.refusal = message
+    end
     if S.state == ST.WAITING_FOR_OPEN then
       StopAuto()
       local obs = Fresh()
@@ -792,7 +875,7 @@ function Session.OnGameEvent(event, a, b)
     StopAuto()
     if S.state == ST.BUYING then Pause("combat")
     elseif S.state == ST.WAITING_FOR_PURCHASE then S.stopRequested = true
-    elseif S.state == ST.REVIEWING then S.frozenQuote = nil; Enter(ST.SELECTING, "changed")
+    elseif S.state == ST.REVIEWING then AbandonReview(); Enter(ST.SELECTING, "changed")
     else Enter(S.state, S.notice, S.reason) end
   elseif event == "PLAYER_REGEN_ENABLED" then
     Enter(S.state, S.notice, S.reason)
@@ -804,6 +887,31 @@ end
 -------------------------------------------------------------------------------
 function Session.State() return S.state end
 
+-- While a Verify scene holds a sample session (Session._test.Hold), nothing it
+-- shows may buy, open or use anything: the one button and the Interact key ask
+-- this, and every action they could start is refused
+function Session.SceneLocked() return S.scene ~= nil end
+
+-- The player's own session while a scene holds a sample one (Session._test.Hold)
+local heldReal
+
+-- No exchange of the player's under way: a scene may hold a sample session.
+-- During a hold it reads the player's session, not the sample (Verify
+-- rechecks a scene's requires while it runs)
+function Session.Idle()
+  local s = heldReal or S
+  return s.scene == nil and s.order == nil and s.plan == nil and next(s.timers) == nil
+    and (s.state == ST.IDLE or s.state == ST.SELECTING)
+end
+
+-- The one button's next action; in a scene it is shown greyed
+local RawNextAction   -- defined below
+function Session.NextAction()
+  local action = RawNextAction()
+  if action and S.scene then action.enabled, action.reason = false, "scene" end
+  return action
+end
+
 function Session.IsBusy()
   return S.state == ST.BUYING or S.state == ST.WAITING_FOR_PURCHASE or S.state == ST.WAITING_FOR_OPEN
     or S.state == ST.WAITING_FOR_LOOT
@@ -811,6 +919,7 @@ end
 
 -- The secure Open button's gate; the button blanks its action on false
 function Session.MayOpen()
+  if S.scene then return false, "scene" end
   if S.state ~= ST.READY_TO_OPEN then return false, "busy" end
   return Opener.MayOpen(S.order, S.ledger, Observer.Current(), S.lootPending)
 end
@@ -828,7 +937,7 @@ end
 --   talk   NEXT_STEP away from Vaskarn: nothing to press; the label says why
 --   wait   buying or opening is under way
 -- nil for every other state (the page shows its own buttons there)
-function Session.NextAction()
+RawNextAction = function()
   local obs = Observer.Current()
   local st = S.state
   if st == ST.READY_TO_OPEN and S.order then
@@ -884,10 +993,38 @@ function Session.Restore()
   end
 end
 
--- Tests only: run fn with a fresh session state, then put the real one back
+-- Tests only: helpers that swap in a fresh session state and put the real one back
 Session._test = {
-  -- fn(getState, views): runs with a fresh state; views collects every
-  -- SessionChanged view instead of broadcasting it
+  -- Verify scenes: a fresh sample session, broadcast as the real one is, for
+  -- the scene's lifetime. Needs a scratch Store (Fixtures.World) and the
+  -- player's session idle. The scene drives it to the state it shows (the
+  -- fixtures' merchant and bags answer), then calls the returned Show(): from
+  -- then on every press, key and command is refused. Cleanup cancels its
+  -- timers, puts the real session back and repaints.
+  Hold = function(ctx)
+    assert(Store._test.Swapped(), "Hold: swap in a scratch Store first (Fixtures.World)")
+    assert(heldReal == nil and S.scene == nil, "Hold: a scene already holds the session")
+    assert(Session.Idle(), "Hold: the player's own exchange is under way")
+    local saved = S
+    S = NewState()
+    S.scene = "setup"
+    heldReal = saved
+    ctx.onCleanup(function()
+      CancelAllTimers()
+      S = saved
+      heldReal = nil
+      Enter(S.state, S.notice, S.reason)
+    end)
+    -- Show() locks it; the second function reads the sample state (a scene
+    -- that shows a choosing page sets its state, as the Window suite does)
+    return function()
+      S.scene = "shown"
+      Enter(S.state, S.notice, S.reason)
+    end, function() return S end
+  end,
+  -- WithState(fn): runs fn(getState, views) on a fresh state, then puts the
+  -- real one back; views collects every SessionChanged view instead of
+  -- broadcasting it
   WithState = function(fn)
     local saved, savedSpy = S, notifySpy
     local views = {}

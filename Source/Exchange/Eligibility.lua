@@ -79,11 +79,11 @@ local function AchievementReason(unlock)
     local text, done = Seams.Call("CriteriaInfo", unlock.achievementID, i)
     if type(text) == "string" and text ~= "" and not done then criteria[#criteria + 1] = text end
   end
-  local rows, weaponsOk = Eligibility.Watermarks(unlock.threshold)
+  local rows, weaponsOk, _, weapons = Eligibility.Watermarks(unlock.threshold)
   return {
     kind = "achievement", id = unlock.achievementID, name = name,
     completed = completed == true, earnedByMe = earnedByMe == true,
-    threshold = unlock.threshold, watermarks = rows, weaponsOk = weaponsOk, criteria = criteria,
+    threshold = unlock.threshold, watermarks = rows, weaponsOk = weaponsOk, weapons = weapons, criteria = criteria,
   }
 end
 

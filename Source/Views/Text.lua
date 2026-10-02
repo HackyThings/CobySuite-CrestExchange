@@ -1,8 +1,9 @@
 -------------------------------------------------------------------------------
--- CobysCrestExchange Views.Text: every sentence the window shows
+-- CobysCrestExchange Views.Text: shared wording for the window
 --
--- One place for wording, number formatting and tier colors, so the pages
--- only lay things out. All wording is our own.
+-- Number formatting, tier colors and the sentences more than one page uses,
+-- so the pages only lay things out; a page keeps its own one-off labels.
+-- All wording is our own.
 -------------------------------------------------------------------------------
 
 CobysCrestExchange.Views = CobysCrestExchange.Views or {}
@@ -131,7 +132,7 @@ local function ButtonName(name) return U.WrapColor(U.Colors.TEXT_GOLD, name) end
 local BUTTON_LINES = {
   ButtonName("Check again") .. ": looks once more; it never buys anything.",
   ButtonName("Discard order") .. ": ends this exchange; what you have stays yours.",
-  ButtonName("Copy details") .. ": a report to share if something looks wrong.",
+  ButtonName("Copy details") .. ": a report, selected for Ctrl+C, to share if something looks wrong.",
 }
 
 local function WithButtons(lines)
@@ -386,8 +387,13 @@ function Text.PlanLimiter(plan, season, away, obs)
   return text .. "."
 end
 
--- The one button while the plan waits for Vaskarn, with the player's Interact key
-function Text.TalkKey(name) return string.format("Talk to Vaskarn: press %s", name) end
+-- The one button while the plan waits for Vaskarn, with the player's Interact
+-- key; targeted: the key reaches him only once he is targeted (Enable
+-- Interact Key is off and the addon may not turn it on)
+function Text.TalkKey(name, targeted)
+  if targeted then return string.format("Target Vaskarn, then press %s", name) end
+  return string.format("Talk to Vaskarn: press %s", name)
+end
 
 -- One plan step in words: a trade, or the packs you already have opened
 function Text.StepWords(season, step)
@@ -402,6 +408,7 @@ end
 function Text.StepBlocked(reason)
   local map = {
     merchant_closed = "Talk to Vaskarn to buy the next step.",
+    offer_changed = "Vaskarn's price for the next step changed since you approved the plan, so nothing more is bought. Discard the order and plan again.",
     combat = "Leave combat to buy the next step.",
     balance = "Not enough crests for the next step: you may have spent some since the plan started.",
     reserve = "Your reserve leaves too few crests for the next step.",

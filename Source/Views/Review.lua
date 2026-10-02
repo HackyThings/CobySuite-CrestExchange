@@ -4,9 +4,11 @@
 -- Shown while the session is REVIEWING, for a single trade or a multi-tier
 -- plan alike, inside the exchange window (no popup). Step cards show each
 -- trade with both crests' icons ("30 Veteran  >  10 Champion, 1 pack");
--- under them what you spend and receive in all, the balances before and
--- after, how the plan runs, and a banner that exchanges can't be refunded (a
--- trade down gets its own warning).
+-- under them what you spend and receive in all, as aligned rows (label, the
+-- crest's icon, the amount, and its balance before and after the packs open;
+-- hovering a row shows the crest's own tooltip), how the plan runs, and a
+-- banner that exchanges can't be refunded (a trade down gets its own
+-- warning).
 --
 -- Protections: Confirm sits in the middle of the page, away from where
 -- Review was pressed, and only arms a moment after the page appears, so a
@@ -33,6 +35,10 @@ local BANNER_H = 26
 local CONFIRM_H = 28
 local CONFIRM_MIN = 34   -- Confirm never sits lower than this, clear of Go back
 local GAP = 10
+local ROWS = 6      -- spend rows (a plan spends up to four tiers) and the receive row
+local ROW_H = 20
+local LABEL_W = 84  -- "You receive" and the gap after it
+local HEAD_H = 14   -- the small "Balance after opening" heading over the rows
 
 local S = { token = 0, armedFor = nil }
 
@@ -41,13 +47,13 @@ local function Icon(ctx, tierKey)
   return t and t.currency.icon or 134400
 end
 
-local function BuildCard(host, i)
+local function BuildCard(host)
   local card = CreateFrame("Frame", nil, host, "BackdropTemplate")
   card:SetHeight(CARD_H - 4)
   card:SetBackdrop(U.Backdrops.CONTENT)
   card:SetBackdropColor(0.06, 0.06, 0.08, 0.95)
   card:SetBackdropBorderColor(0.4, 0.4, 0.4, 0.9)
-  card.Num = card:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+  card.Num = card:CreateFontString(nil, "OVERLAY", U.Fonts.TITLE)
   card.Num:SetPoint("LEFT", 8, 0)
   card.FromIcon = card:CreateTexture(nil, "ARTWORK")
   card.FromIcon:SetSize(20, 20)
@@ -68,6 +74,59 @@ local function BuildCard(host, i)
   card.Packs:SetPoint("RIGHT", -8, 0)
   card.Packs:SetTextColor(0.75, 0.75, 0.75)
   return card
+end
+
+-- One "You spend" or "You receive" row; its hover is the crest's own
+-- tooltip with what this exchange does to it
+-- Fills tip (GameTooltip on a hover, or a Verify grid tip) for one row's entry
+local function FillRowTooltip(tip, e)
+  -- The game's currency tooltip only for a currency it knows: for one it
+  -- doesn't, SetCurrencyByID hides the tip and the lines below go nowhere
+  local okData, data = pcall(C_TooltipInfo.GetCurrencyByID, e.currencyID)
+  local ok = e.currencyID and okData and data and pcall(tip.SetCurrencyByID, tip, e.currencyID)
+  if not ok then tip:SetText(e.name or "") end
+  if e.n then
+    tip:AddLine(" ")
+    tip:AddLine(string.format(e.spend and "This exchange spends %s." or "This exchange gives %s.", e.text), 1, 1, 1, true)
+  end
+  if e.before and e.after then
+    tip:AddLine(string.format("Your balance: %s now, %s after the packs open.", T.Count(e.before), T.Count(e.after)),
+      1, 1, 1, true)
+  end
+end
+
+local function RowTooltip(row)
+  local e = row.entry
+  if not e then return end
+  GameTooltip:SetOwner(row, "ANCHOR_RIGHT")
+  FillRowTooltip(GameTooltip, e)
+  GameTooltip:Show()
+end
+
+local function BuildRow(host)
+  local row = CreateFrame("Frame", nil, host)
+  row:SetHeight(ROW_H)
+  row:EnableMouse(true)
+  UI.AddHoverHighlight(row)
+  row.Label = row:CreateFontString(nil, "OVERLAY", U.Fonts.BODY)
+  row.Label:SetPoint("LEFT", 0, 0)
+  row.Label:SetWidth(LABEL_W)
+  row.Label:SetJustifyH("LEFT")
+  local gold = U.Colors.STATUS_GOLD
+  row.Label:SetTextColor(gold[1], gold[2], gold[3])
+  row.Icon = row:CreateTexture(nil, "ARTWORK")
+  row.Icon:SetSize(16, 16)
+  row.Icon:SetPoint("LEFT", LABEL_W, 0)
+  row.Amount = row:CreateFontString(nil, "OVERLAY", U.Fonts.BODY)
+  row.Amount:SetJustifyH("LEFT")
+  row.Balance = row:CreateFontString(nil, "OVERLAY", U.Fonts.DATA)
+  row.Balance:SetPoint("RIGHT", -4, 0)
+  row.Balance:SetJustifyH("RIGHT")
+  local gray = U.Colors.LIGHT_GRAY
+  row.Balance:SetTextColor(gray[1], gray[2], gray[3])
+  row:SetScript("OnEnter", RowTooltip)
+  row:SetScript("OnLeave", function(self) if GameTooltip:IsOwned(self) then GameTooltip:Hide() end end)
+  return row
 end
 
 local function Line(host, font)
@@ -98,7 +157,7 @@ local function Build(host)
     self:SetVerticalScroll(math.min(most, math.max(0, self:GetVerticalScroll() - delta * CARD_H)))
   end)
   for i = 1, CARDS do
-    local card = BuildCard(page.List, i)
+    local card = BuildCard(page.List)
     card:SetPoint("TOPLEFT", page.List, "TOPLEFT", 0, -(i - 1) * CARD_H)
     card:SetPoint("TOPRIGHT", page.List, "TOPRIGHT", 0, -(i - 1) * CARD_H)
     page.cards[i] = card
@@ -106,8 +165,24 @@ local function Build(host)
   page.More = Line(host, U.Fonts.SMALL)
   page.More:SetPoint("TOPLEFT", page.Scroll, "BOTTOMLEFT", 4, -2)
   page.More:SetTextColor(0.65, 0.65, 0.65)
-  page.Totals = Line(host)
-  page.Totals:SetSpacing(3)
+  -- What you spend and receive, as aligned rows under a small heading
+  page.Rows = CreateFrame("Frame", nil, host)
+  page.Rows:SetHeight(HEAD_H)
+  local gray = U.Colors.LABEL_GRAY
+  page.BalanceHead = page.Rows:CreateFontString(nil, "OVERLAY", U.Fonts.SMALL)
+  page.BalanceHead:SetPoint("TOPRIGHT", page.Rows, "TOPRIGHT", -4, 0)
+  page.BalanceHead:SetText("Balance after opening")
+  page.BalanceHead:SetTextColor(gray[1], gray[2], gray[3])
+  page.rows = {}
+  for i = 1, ROWS do
+    local row = BuildRow(page.Rows)
+    row:SetPoint("TOPLEFT", page.Rows, "TOPLEFT", 0, -HEAD_H - (i - 1) * ROW_H)
+    row:SetPoint("TOPRIGHT", page.Rows, "TOPRIGHT", 0, -HEAD_H - (i - 1) * ROW_H)
+    page.rows[i] = row
+  end
+  page.Note = Line(host, U.Fonts.SMALL)
+  page.Note:SetSpacing(2)
+  page.Note:SetTextColor(gray[1], gray[2], gray[3])
   page.Balances = Line(host, U.Fonts.DATA)
   page.Balances:SetSpacing(2)
   page.Info = Line(host, U.Fonts.SMALL)
@@ -168,49 +243,83 @@ local function FillCards(page, ctx, steps)
   end
 end
 
-local function TotalsText(ctx, steps, plan, quote)
-  local spend, receiveKey, receive = {}, nil, 0
+-- A tier's balance now and after the packs open, or nil when it doesn't change
+local function BeforeAfter(plan, quote, tierKey)
+  local before, after
+  if plan then
+    before, after = plan.before and plan.before[tierKey], plan.after and plan.after[tierKey]
+  elseif tierKey == quote.sourceTier then
+    before, after = quote.sourceBefore, quote.sourceAfter
+  elseif tierKey == quote.destTier then
+    before, after = quote.destBefore, quote.destAfterOpen
+  end
+  if before and after and before ~= after then return before, after end
+end
+
+-- The rows: each tier you spend, then the tier you receive
+local function Entries(ctx, plan, quote)
+  local list = {}
+  local function Add(label, tierKey, n, spend)
+    local t = ctx.obs.tiers[tierKey]
+    local before, after = BeforeAfter(plan, quote, tierKey)
+    list[#list + 1] = { label = label, key = tierKey, n = n, spend = spend, text = T.Crests(ctx.season, tierKey, n),
+      name = T.Currency(ctx.season, tierKey), currencyID = t and t.tier and t.tier.currencyID,
+      icon = Icon(ctx, tierKey), before = before, after = after }
+  end
   if plan then
     for _, tier in ipairs(ctx.season.tiers) do
       local n = plan.spendBy and plan.spendBy[tier.key]
-      if n and n > 0 then spend[#spend + 1] = T.Crests(ctx.season, tier.key, n) end
+      if n and n > 0 and #list < ROWS - 1 then Add(#list == 0 and "You spend" or "", tier.key, n, true) end
     end
-    receiveKey, receive = plan.target, plan.crests
+    -- Opening packs you have spends no balance
+    if #list == 0 then list[1] = { label = "You spend", text = "nothing from your balances" } end
+    Add("You receive", plan.target, plan.crests, false)
   else
-    spend[1] = T.Crests(ctx.season, quote.sourceTier, quote.spend)
-    receiveKey, receive = quote.destTier, quote.crests
+    Add("You spend", quote.sourceTier, quote.spend, true)
+    Add("You receive", quote.destTier, quote.crests, false)
   end
-  if #spend == 0 then spend[1] = "nothing from your balances" end
-  local text = string.format("|cffffd100You spend|r   %s\n|cffffd100You receive|r   %s", table.concat(spend, ", "),
-    T.Crests(ctx.season, receiveKey, receive))
-  -- A plan's totals are what leaves your balances: each later step also spends
-  -- the crests the step before it made, so the steps add up to more
-  if plan and #steps > 1 then
-    text = text .. "\n" .. U.WrapColor(U.Colors.LABEL_GRAY,
-      "Each step after the first also spends the crests the step before it made, so the steps add up to more than you spend.")
-  end
-  return text
+  return list
 end
 
-local function BalancesText(ctx, plan, quote)
-  local parts = {}
-  for _, tier in ipairs(ctx.season.tiers) do
-    local before, after
-    if plan then
-      before, after = plan.before and plan.before[tier.key], plan.after and plan.after[tier.key]
-    elseif tier.key == quote.sourceTier then
-      before, after = quote.sourceBefore, quote.sourceAfter
-    elseif tier.key == quote.destTier then
-      before, after = quote.destBefore, quote.destAfterOpen
+local function FillRows(page, entries)
+  for i, row in ipairs(page.rows) do
+    local e = entries[i]
+    row:SetShown(e ~= nil)
+    row.entry = e
+    if e then
+      row.Label:SetText(e.label)
+      row.Icon:SetShown(e.icon ~= nil)
+      if e.icon then row.Icon:SetTexture(e.icon) end
+      row.Amount:ClearAllPoints()
+      if e.icon then
+        row.Amount:SetPoint("LEFT", row.Icon, "RIGHT", 6, 0)
+      else
+        row.Amount:SetPoint("LEFT", row, "LEFT", LABEL_W, 0)
+      end
+      row.Amount:SetText(e.text)
+      row.Balance:SetText(e.before and string.format("%s > %s", T.Count(e.before), T.Count(e.after)) or "")
+      row:EnableMouse(e.n ~= nil)
     end
-    if before and after and before ~= after then
+  end
+  page.Rows:SetHeight(HEAD_H + #entries * ROW_H)
+end
+
+-- Tiers whose balance changes but have no row of their own (a plan's
+-- passing tiers, when they don't come out even)
+local function OtherBalances(ctx, plan, quote, entries)
+  local shown, parts = {}, {}
+  for _, e in ipairs(entries) do if e.key then shown[e.key] = true end end
+  for _, tier in ipairs(ctx.season.tiers) do
+    local before, after = BeforeAfter(plan, quote, tier.key)
+    if before and not shown[tier.key] then
       parts[#parts + 1] = string.format("%s %s > %s", T.Tier(ctx.season, tier.key), T.Count(before), T.Count(after))
     end
   end
-  return "After the packs open:  " .. table.concat(parts, "   ")
+  if #parts == 0 then return "" end
+  return "Also after the packs open:  " .. table.concat(parts, "   ")
 end
 
-local function InfoText(ctx, steps, plan, quote)
+local function InfoText(ctx, steps, plan)
   local lines = {}
   if plan and CobysCrestExchange.Plan.OpenOnly(plan) then
     lines[#lines + 1] = "Nothing is bought: one press opens each of your packs. The window always shows the next press."
@@ -237,9 +346,10 @@ end
 local function PlaceBanner(page, count)
   local width = page.frame:GetWidth() - 8
   local used = 44 + math.min(count, VISIBLE) * CARD_H + (count > VISIBLE and MORE_H or 0) + 10
-  for _, fs in ipairs({ page.Totals, page.Balances, page.Info }) do
+  used = used + page.Rows:GetHeight() + 6
+  for _, fs in ipairs({ page.Note, page.Balances, page.Info }) do
     fs:SetWidth(width)
-    used = used + fs:GetStringHeight() + 8
+    if (fs:GetText() or "") ~= "" then used = used + fs:GetStringHeight() + 8 end
   end
   -- the banner's bottom, measured up from the page's bottom
   local below = page.frame:GetHeight() - used - GAP - BANNER_H
@@ -259,12 +369,29 @@ local function Arm(page, key)
   local mine = S.token
   page.Confirm:Disable()
   C_Timer.After(ARM_DELAY, function()
-    if mine == S.token and page.frame:IsShown() then page.Confirm:Enable() end
+    if mine == S.token and page.frame:IsShown() and not CobysCrestExchange.Session.SceneLocked() then
+      page.Confirm:Enable()
+    end
   end)
 end
 
 local Review = {}
 Views.Review = Review
+Review.FillRowTooltip = FillRowTooltip
+
+-- Whether a later trade spends crests an earlier step made (opening packs
+-- you have spends nothing)
+local function Chained(steps)
+  for i = 2, #steps do
+    local s = steps[i]
+    if s.kind ~= "open" then
+      for j = 1, i - 1 do
+        if steps[j].to == s.from then return true end
+      end
+    end
+  end
+  return false
+end
 
 local page = Window.AddPage("review", Build)
 
@@ -292,22 +419,34 @@ function page:Refresh(ctx)
   local more = count > VISIBLE
   self.More:SetShown(more)
   if more then self.More:SetText(string.format("Scroll for steps %d to %d", VISIBLE + 1, count)) end
-  self.Totals:ClearAllPoints()
+  self.Rows:ClearAllPoints()
   if more then
-    self.Totals:SetPoint("TOPLEFT", self.More, "BOTTOMLEFT", 0, -6)
+    self.Rows:SetPoint("TOPLEFT", self.More, "BOTTOMLEFT", 0, -6)
   else
-    self.Totals:SetPoint("TOPLEFT", self.Scroll, "BOTTOMLEFT", 4, -6)
+    self.Rows:SetPoint("TOPLEFT", self.Scroll, "BOTTOMLEFT", 4, -6)
   end
-  self.Totals:SetPoint("RIGHT", self.frame, "RIGHT", -4, 0)
-  self.Totals:SetText(TotalsText(ctx, steps, plan, quote))
-  self.Balances:ClearAllPoints()
-  self.Balances:SetPoint("TOPLEFT", self.Totals, "BOTTOMLEFT", 0, -8)
-  self.Balances:SetPoint("RIGHT", self.frame, "RIGHT", -4, 0)
-  self.Balances:SetText(BalancesText(ctx, plan, quote))
+  self.Rows:SetPoint("RIGHT", self.frame, "RIGHT", -4, 0)
+  local entries = Entries(ctx, plan, quote)
+  FillRows(self, entries)
+  -- Under the rows: a plan's note, then any other balance that changes
+  local anchor = self.Rows
+  local function Next(fs, text)
+    fs:ClearAllPoints()
+    fs:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, -6)
+    fs:SetPoint("RIGHT", self.frame, "RIGHT", -4, 0)
+    fs:SetText(text)
+    fs:SetShown(text ~= "")
+    if text ~= "" then anchor = fs end
+  end
+  -- A plan's totals are what leaves your balances: when a later trade spends
+  -- crests an earlier step made, the steps add up to more
+  Next(self.Note, (plan and Chained(steps))
+    and "A step can spend crests the step before it made, so the steps add up to more than you spend." or "")
+  Next(self.Balances, OtherBalances(ctx, plan, quote, entries))
   self.Info:ClearAllPoints()
-  self.Info:SetPoint("TOPLEFT", self.Balances, "BOTTOMLEFT", 0, -8)
+  self.Info:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, -8)
   self.Info:SetPoint("RIGHT", self.frame, "RIGHT", -4, 0)
-  self.Info:SetText(InfoText(ctx, steps, plan, quote))
+  self.Info:SetText(InfoText(ctx, steps, plan))
   PlaceBanner(self, #steps)
   local spendText = plan and "Confirm: start the plan" or ("Confirm: spend " .. T.Count(quote.spend) .. " " .. T.TierLabel(ctx.season, quote.sourceTier))
   self.Confirm:SetText(spendText)

@@ -30,6 +30,8 @@ Views.Ladder = Ladder
 
 local UI = CobySuite_CobysCrestExchange.UI
 local U = CobySuite_CobysCrestExchange.Utilities
+local GOLD = U.Colors.STATUS_GOLD
+local WHITE = U.Colors.HIGHLIGHT_WHITE
 
 local FALLBACK_ICON = 134400   -- the question-mark icon
 local DOTS = 3
@@ -42,7 +44,7 @@ local RGB = CobySuite_CobysCrestExchange.Utilities.HexToRGB
 -------------------------------------------------------------------------------
 -- Building
 -------------------------------------------------------------------------------
-local function BuildNode(ladder, parent, index, opts)
+local function BuildNode(ladder, parent, opts)
   local node = CreateFrame("Button", nil, parent, "BackdropTemplate")
   node:SetHeight(opts.nodeH)
   if opts.nodeW then node:SetWidth(opts.nodeW) end
@@ -144,7 +146,7 @@ local function BuildLink(parent, lower, upper, opts)
   link.Dots = {}
   for i = 1, DOTS do link.Dots[i] = BuildDot(link, i, opts) end
   -- A link a page gives a tooltip (and maybe a click) takes the mouse; others don't
-  UI.AddDynamicTooltip(link, function(tip, self) if self.tooltip then self.tooltip(tip) end end)
+  UI.AddDynamicTooltip(link, function(tip, self) if self.tooltip then self.tooltip(tip) end end, { fillable = true })
   link:SetScript("OnMouseUp", function(self, button)
     if button == "LeftButton" and self.onClick and self:IsMouseOver() then self.onClick() end
   end)
@@ -163,7 +165,7 @@ function Ladder.Create(parent, opts)
   ladder.frame:SetHeight(5 * opts.nodeH + 4 * opts.gap)
   -- Myth (5) on top, Adventurer (1) at the bottom
   for i = 5, 1, -1 do
-    local node = BuildNode(ladder, ladder.frame, i, opts)
+    local node = BuildNode(ladder, ladder.frame, opts)
     node:SetPoint("TOPLEFT", ladder.frame, "TOPLEFT", 0, -(5 - i) * (opts.nodeH + opts.gap))
     if not opts.nodeW then node:SetPoint("RIGHT", ladder.frame, "RIGHT", -2, 0) end
     ladder.nodes[i] = node
@@ -185,7 +187,7 @@ local function DrawNode(node, season, tier, data)
   node.Sub:SetText(data.sub or "")
   node.Value:SetText(data.value or "")
   local vc = data.valueColor
-  if vc then node.Value:SetTextColor(vc[1], vc[2], vc[3]) else node.Value:SetTextColor(1, 1, 1) end
+  if vc then node.Value:SetTextColor(vc[1], vc[2], vc[3]) else node.Value:SetTextColor(WHITE[1], WHITE[2], WHITE[3]) end
   node:SetAlpha(data.dim and 0.55 or 1)
   if data.glow then
     node:SetBackdropBorderColor(r, g, b, 1)
@@ -209,7 +211,7 @@ local LINK_STATES = {
   idle    = { line = { 0.35, 0.35, 0.35, 0.8 }, arrow = 0.35, mark = nil },
   locked  = { line = { 0.35, 0.2, 0.2, 0.8 }, arrow = 0.25, mark = "AdventureMapIcon-Lock" },
   pending = { line = { 0.6, 0.6, 0.6, 0.9 }, arrow = 0.7, mark = nil, flow = true },
-  current = { line = { 1, 0.82, 0, 1 }, arrow = 1, mark = nil, flow = true },
+  current = { line = { GOLD[1], GOLD[2], GOLD[3], 1 }, arrow = 1, mark = nil, flow = true },
   done    = { line = { 0.2, 0.8, 0.2, 1 }, arrow = 0.8, mark = "checkmark-minimal" },
 }
 

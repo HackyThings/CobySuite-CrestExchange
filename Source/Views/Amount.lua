@@ -49,6 +49,7 @@ local function BuildStepper(host, page)
     parse = function(text) local n = tonumber(text); return n and n == math.floor(n) and n or nil end,
     validate = function(n) return n >= 1 and n <= 100000 end,
     onCommit = function(n) Select(n) end })
+  page.Input:SetNumeric(true)   -- digits only
   page.Plus = UI.CreateButton(host, { text = "+", size = { 24, 22 }, point = { "LEFT", page.Input, "RIGHT", 4, 0 },
     onClick = function() Step(page, 1) end })
   page.Max = UI.CreateButton(host, { text = "Max", size = { 50, 22 }, point = { "LEFT", page.Plus, "RIGHT", 6, 0 },
@@ -57,7 +58,7 @@ local function BuildStepper(host, page)
     local q = page.q
     tip:AddLine("Max: " .. (q and T.Count(q.maxCrests) or "?"))
     if q and q.limiter then tip:AddLine("Limited by: " .. T.Limiter(q.limiter), 1, 1, 1, true) end
-  end)
+  end, { fillable = true })
   local label = host:CreateFontString(nil, "OVERLAY", U.Fonts.BODY)
   label:SetPoint("RIGHT", page.Minus, "LEFT", -8, 0)
   label:SetText("Receive")
@@ -133,6 +134,7 @@ local function BuildOptions(host, page)
         Bus():Fire(E.PreferenceChanged, "reserve", src.currencyID, n)
       end
     end })
+  page.Reserve:SetNumeric(true)
   page.ReserveUnit = host:CreateFontString(nil, "OVERLAY", U.Fonts.BODY)
   page.ReserveUnit:SetPoint("LEFT", page.Reserve, "RIGHT", 8, 0)
   page.AutoOpen = UI.CreateCheckbox(host, { label = "Open packs automatically after you close Vaskarn",

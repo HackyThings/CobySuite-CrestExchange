@@ -133,7 +133,10 @@ function Plan.Chain(obs, season, targetIndex, packs, opts)
   for k = targetIndex, 2, -1 do
     local toTier, fromTier = season.tiers[k], season.tiers[k - 1]
     local product = UpInto(season, toTier.key)
-    local offer, seen = product and Offer(obs, product.key)
+    -- Both returns: "product and Offer(...)" would keep only the first, and
+    -- seen (an offer from the last visit) would never mark the plan
+    local offer, seen
+    if product then offer, seen = Offer(obs, product.key) end
     if not offer then return nil, "unavailable", toTier.key end
     planning = planning or seen
     local yield, cost = offer.yieldPerUnit, offer.costPerUnit
@@ -164,6 +167,10 @@ function Plan.Chain(obs, season, targetIndex, packs, opts)
       end
       avail = avail + math.max(0, got - deficit)
       short = math.max(0, deficit - got)
+    elseif avail < req then
+      -- A tier passed through (not spent) is still held to its reserve when
+      -- the step runs, so what the reserve lacks is made too
+      short = Deficit(obs, fromTier, opts)
     end
     if avail >= req then
       for _, o in ipairs(opens) do steps[#steps + 1] = o end
@@ -248,6 +255,23 @@ function Plan.OpenOnly(plan)
     if step.kind ~= "open" then return false end
   end
   return true
+end
+
+-- The Get page's chosen route. routes = { { key, kind ("trade" or "plan"),
+-- open, ok, down, max } }: the player's pick (`picked`, a route key) while it
+-- works (or while no amount is typed, `hasAmount` false), else the plan when
+-- it works (Cobanyte, 2026-10-01: "Plan first", over a single trade up),
+-- else the first route that works, else the open route that gives the most.
+-- A trade down is never chosen for you: only your own click picks it.
+function Plan.ChooseRoute(routes, picked, hasAmount)
+  for _, r in ipairs(routes) do if r.key == picked and r.open and (r.ok or not hasAmount) then return r end end
+  for _, r in ipairs(routes) do if r.ok and r.kind == "plan" then return r end end
+  for _, r in ipairs(routes) do if r.ok and not r.down then return r end end
+  local best
+  for _, r in ipairs(routes) do
+    if r.open and not r.down and (not best or (r.max or 0) > (best.max or 0)) then best = r end
+  end
+  return best
 end
 
 -- The tiers whose balance a plan into targetKey could spend: every tier below it

@@ -57,6 +57,12 @@ function SecureOpen.Create(parent, point)
 
   button:SetScript("PreClick", function(self)
     local Session = CobysCrestExchange.Session
+    -- A Verify scene shows sample state: the press does nothing at all
+    if Session.SceneLocked() then
+      self:SetAttribute("type", "")
+      self.blanked = true
+      return
+    end
     local mode = self.mode or "open"
     if mode ~= "open" then
       -- Not an item use: blank the secure action and do this mode's own step
@@ -104,17 +110,33 @@ local function KeyLabel(text, mode)
   if not key then return text end
   if mode == "talk" then
     local name = key.Name()
-    return name and Views.Text.TalkKey(name) or text
+    return name and Views.Text.TalkKey(name, not key.TalkReady()) or text
   end
   local name = key.ClickName()
   return name and string.format("%s  (%s)", text, name) or text
+end
+
+-- The debug log notes each change of what the button says and why it is
+-- greyed (only on a change, so a refresh never repeats it)
+local lastSaid
+local function Note(text, enabled, why)
+  local said = string.format("%s, %s%s", tostring(text), enabled and "enabled" or "greyed", why and (": " .. tostring(why)) or "")
+  if said == lastSaid then return end
+  lastSaid = said
+  CobysCrestExchange.Debug.Log("UI", "Button: %s", said)
 end
 
 local function Paint(view)
   local button = SecureOpen.button
   if not button then return end
   local order = view.order
-  if order and order.itemID and not InCombatLockdown() then Arm(button, order.itemID) end
+  local scene = CobysCrestExchange.Session.SceneLocked()
+  if scene and not InCombatLockdown() then
+    button:SetAttribute("type", "")
+    button:SetAttribute("item", nil)
+  elseif order and order.itemID and not InCombatLockdown() then
+    Arm(button, order.itemID)
+  end
   local state = view.state
   local action = CobysCrestExchange.Session.NextAction()
   local mode = action and action.mode or "open"
@@ -124,21 +146,35 @@ local function Paint(view)
   end
   button.mode = mode
   if action and mode ~= "open" then
-    button:SetText(KeyLabel(action.label, mode))
-    button:SetEnabled(action.enabled and (mode ~= "buy" or GetTime() >= (button.readyAt or 0)))
+    -- The log notes the label as shown, key and target wording included
+    local shown = KeyLabel(action.label, mode)
+    button:SetText(shown)
+    local guarded = mode == "buy" and GetTime() < (button.readyAt or 0)
+    button:SetEnabled(action.enabled and not guarded)
+    Note(shown, action.enabled and not guarded, action.reason or (guarded and "just appeared" or nil))
     return
   end
   if state == "COMPLETE" or (order and (view.openQuota or 0) <= 0) then
     -- An exchange ended early says so rather than claiming every pack opened
     local r = state == "COMPLETE" and view.receipt
-    local unopened = r and r.outcome == "left" and r.order and r.ledger
-      and ((r.order.kind == "open_existing" and r.ledger.openQuota or r.ledger.purchased) - r.ledger.opened) or 0
+    local unopened = r and r.outcome == "left" and r.unopened or 0
     button:SetText(unopened > 0 and "Packs left unopened" or "All packs opened")
     button:Disable()
+    Note(unopened > 0 and "Packs left unopened" or "All packs opened", false, state)
     return
   end
   button:SetText(KeyLabel("Open next pack", "open"))
-  button:SetEnabled(state == "READY_TO_OPEN" and view.canOpen == true)
+  -- Greyed under a Verify scene's lock too: view.canOpen is the sample's own
+  -- state (the page's text shows it), not whether this button may act
+  -- (in game 2026-10-01: the Window suite's scene-lock test found it enabled)
+  local enabled = state == "READY_TO_OPEN" and view.canOpen == true and not scene
+  button:SetEnabled(enabled)
+  local why
+  if not enabled then
+    why = scene and "scene" or state
+    if state == "READY_TO_OPEN" and not scene then why = select(2, CobysCrestExchange.Session.MayOpen()) or state end
+  end
+  Note("Open next pack", enabled, why)
 end
 
 -- Called on every progress refresh: the button, then what the Interact key does

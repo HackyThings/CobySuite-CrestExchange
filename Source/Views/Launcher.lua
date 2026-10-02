@@ -11,22 +11,16 @@ local Views = CobysCrestExchange.Views
 local Launcher = {}
 Views.Launcher = Launcher
 
+-- The suite's one tooltip shape (CobySuite.UI.LauncherTooltip), with a line
+-- for an unfinished exchange
 local function TooltipOpts()
-  local body = { "A better crest exchange at Vaskarn: see what you can convert, pick an amount, and convert in a few clicks." }
   local Store = CobysCrestExchange.Store
   local order = Store and Store.GetOrder()
-  if order then body[#body + 1] = "You have an unfinished exchange." end
-  return {
-    brandColor = CobysCrestExchange.BRAND_COLOR,
-    title = "Coby's Crest Exchange",
-    subtitle = "v" .. CobysCrestExchange.VERSION,
-    body = body,
-    keys = {
-      { key = "Click", desc = "Exchange window" },
-      { key = "Right-click", desc = "Settings" },
-      { key = "/ce help", desc = "Command list" },
-    },
-  }
+  return CobySuite_CobysCrestExchange.UI.LauncherTooltip({
+    title = "Coby's Crest Exchange", brandColor = CobysCrestExchange.BRAND_COLOR, icon = CobysCrestExchange.ICON,
+    status = order and "You have an unfinished exchange." or nil,
+    leftClick = "Open the exchange window", rightClick = "Open settings",
+  })
 end
 
 local launcher = CobySuite_CobysCrestExchange.UI.CreateLauncher({

@@ -4,6 +4,39 @@ All notable changes to Coby's Crest Exchange are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.0.2] - 2026-10-01
+
+### Added
+- Walking back to Vaskarn: you can now stop the addon from turning on the game's Enable Interact Key for you.
+
+### Changed
+- Settings redesigned in three pages (Exchange, Interact key, Window) with picture tiles.
+- When visiting Vaskarn is its own setting: full window, small tab, or stay closed. Folding the window no longer changes it, and your earlier choice carries over.
+- Where it docks: Prefer right, Prefer left, Automatic or Saved position.
+- Use every lower tier is picked first when it works for your amount. Trade down is never picked for you.
+- Opening packs you already had ends with "Packs opened" and no Spent line.
+- Paused away from Vaskarn, the window says to talk to him to buy the rest.
+- Copy buttons now say to press Ctrl+C.
+- Get page: the routes stay grayed out until you type an amount, and amount boxes take digits only.
+- Review shows each crest's icon, its balance after opening, and a tooltip.
+- Locked trades list your gear slots in a table, with the item level each one needs.
+- Trade labels read the same everywhere ("Trade up 30 for 10"), using the last prices seen when you're away from Vaskarn.
+- The Discard this order? confirmation shows the addon's icon.
+- `/ce debug` logs more about each purchase and pack opening.
+
+### Fixed
+- A finished plan's receipt totals every step, not just the last.
+- "End exchange here" is grayed out while a pack is opening.
+- The Get page's unopened-packs note and a plan's next-step message no longer get cut off.
+- "Wait for the last pack to finish opening" no longer lingers after the pack is done.
+- Before you spend no longer leaves an empty gap under Your upgrade tracks.
+- A plan stops before buying a step whose price changed; discard it and plan again.
+- An unrelated game error during a purchase is no longer read as Vaskarn refusing it.
+- A plan review interrupted by combat or closing Vaskarn's window no longer carries into the next review.
+- Use every lower tier now respects a tier's Keep at least amount, even when that tier isn't spent.
+- With saved data from a newer version of the addon, nothing is bought or written until you update.
+- A plan priced from your last visit says so and waits for live prices before review.
+
 ## [0.0.1] - 2026-10-01
 
 ### Added

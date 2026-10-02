@@ -1,6 +1,6 @@
 ## Interface: 120100
 ## Title: Coby's Crest Exchange
-## Version: 0.0.1
+## Version: 0.0.2
 ## Author: Cobanyte
 ## Notes: A better crest exchange at Vaskarn: see what you can convert, pick an amount, and convert in a few clicks.
 ## IconTexture: Interface\Icons\inv_121_crest_myth
@@ -19,8 +19,11 @@ Libs\CobySuite\Source\Slash\Main.lua
 Libs\CobySuite\Source\Config\Main.lua
 Libs\CobySuite\Source\UI\Factories.lua
 Libs\CobySuite\Source\UI\Window.lua
+Libs\CobySuite\Source\UI\ClickPrompt.lua
 Libs\CobySuite\Source\UI\FilterMenu.lua
 Libs\CobySuite\Source\UI\SettingsWindow.lua
+Libs\CobySuite\Source\UI\TableHeader.lua
+Libs\CobySuite\Source\UI\SortTable.lua
 Libs\CobySuite\Source\UI\Launcher.lua
 Libs\CobySuite\Source\UI\Guide.lua
 Libs\CobySuite\Source\Debug\Logger.lua

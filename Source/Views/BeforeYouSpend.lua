@@ -114,6 +114,7 @@ local function BuildReserves(host, page)
           CobysCrestExchange.EventBus:Fire(E.PreferenceChanged, "reserve", box.currencyID, n)
         end
       end })
+    input:SetNumeric(true)   -- digits only
     page.reserves[i] = { icon = icon, label = label, input = input }
   end
 end
@@ -146,11 +147,13 @@ end
 local function RefreshTracks(page, season)
   local tracks, order, unknown = Gear.Tracks()
   order = LadderOrder(season, order)
+  local last = 0
   for i, bar in ipairs(page.bars) do
     local name = order[i]
     local t = name and tracks[name]
     bar:SetShown(t ~= nil)
     if t then
+      last = i
       bar:SetValue(t.maxLevels > 0 and t.levels / t.maxLevels or 0)
       bar:SetStatusBarColor(t.ranksLeft == 0 and 0.25 or 0.35, t.ranksLeft == 0 and 0.75 or 0.55, t.ranksLeft == 0 and 0.3 or 1)
       bar.Text:SetText(string.format("%s: %s %s", name, T.Count(t.items), T.Plural(t.items, "item", "items")))
@@ -158,12 +161,14 @@ local function RefreshTracks(page, season)
     end
   end
   local notes = {}
-  if #order == 0 then notes[#notes + 1] = "None of your equipped items can be upgraded." end
+  if #order == 0 then notes[#notes + 1] = "No upgrade tracks found on your equipped items." end
   if unknown > 0 then
-    notes[#notes + 1] = string.format("%d equipped %s no upgrade track (crafted gear, for example).", unknown, T.Plural(unknown, "item has", "items have"))
+    notes[#notes + 1] = string.format("%d equipped %s no readable upgrade track.", unknown, T.Plural(unknown, "item has", "items have"))
   end
   notes[#notes + 1] = "Ranks left are not a crest cost: discounts and your highest item levels change what a rank costs."
   page.TrackNote:SetText(table.concat(notes, " "))
+  -- Right under the last bar: fewer tracks (or none) leave no empty rows above it
+  page.TrackNote:SetPoint("TOPLEFT", page.TracksHead, "BOTTOMLEFT", 2, -6 - last * ROW_H)
 end
 
 local function LowestText()

@@ -9,7 +9,9 @@
 --       offers   = { seenAt, npcID, list = { { key, itemID, sourceCurrencyID,
 --                    costPerUnit, yieldPerUnit } } },   -- for the away view
 --       order    = { order = Order, ledger = Ledger } or nil,
---       plan     = a multi-tier plan between or during its steps, or nil,
+--       plan     = a multi-tier plan between or during its steps, or nil
+--                  (totals = crests spent and received per tier, and packs
+--                  left unopened, over its ended steps),
 --       history  = { { key, packs, spent, received, outcome, endedAt } },
 --     } } } },
 --     lastCapture = { at, text },
@@ -182,7 +184,8 @@ function Store.Bucket()
     bucket = { reserves = {}, autoOpen = false, history = {} }
     char.seasons[S.seasonKey] = bucket
   end
-  bucket.seenAt = char.seenAt
+  -- Never a write into a newer build's data (read-only)
+  if not S.readOnly then bucket.seenAt = char.seenAt end
   return bucket
 end
 
@@ -232,6 +235,9 @@ function Store.SaveOrder(order, ledger)
 end
 
 function Store.GetOrder()
+  -- A newer build's order is never handed out: the session would run on
+  -- (and write into) unvalidated saved objects
+  if S.readOnly then return nil end
   local bucket = Store.Bucket()
   if bucket and bucket.order then return bucket.order.order, bucket.order.ledger end
 end
@@ -254,6 +260,15 @@ function Store.ClearOrder(outcome)
   bucket.order = nil
 end
 
+-- { [tierKey] = whole number } from a saved table, anything else dropped
+local function WholeByTier(t)
+  local out = {}
+  for k, v in pairs(type(t) == "table" and t or {}) do
+    if type(k) == "string" and Whole(v) then out[k] = v end
+  end
+  return out
+end
+
 -- A saved plan, cleaned, or nil
 function Store.ValidatePlan(plan)
   if type(plan) ~= "table" or type(plan.target) ~= "string" or not Whole(plan.crests) or type(plan.steps) ~= "table"
@@ -271,12 +286,11 @@ function Store.ValidatePlan(plan)
     steps[i] = { kind = open and "open" or nil, key = s.key, from = not open and s.from or nil, to = s.to,
       packs = s.packs, cost = s.cost, yield = s.yield, spend = s.packs * s.cost }
   end
-  local keep = {}
-  for k, v in pairs(type(plan.keep) == "table" and plan.keep or {}) do
-    if type(k) == "string" and Whole(v) then keep[k] = v end
-  end
-  return { target = plan.target, crests = plan.crests, steps = steps, index = plan.index, keep = keep,
-    autoOpen = plan.autoOpen == true }
+  local totals = type(plan.totals) == "table" and plan.totals or {}
+  return { target = plan.target, crests = plan.crests, steps = steps, index = plan.index, keep = WholeByTier(plan.keep),
+    autoOpen = plan.autoOpen == true,
+    totals = { spent = WholeByTier(totals.spent), received = WholeByTier(totals.received),
+      unopened = Whole(totals.unopened) and totals.unopened or 0 } }
 end
 
 function Store.SavePlan(plan)
@@ -307,11 +321,16 @@ end
 -- Tests only: swap the live table and binding, then put them back
 Store._test = {
   Swap = function(data, charKey, seasonKey)
-    local previous = { data = S.data, charKey = S.charKey, seasonKey = S.seasonKey, readOnly = S.readOnly }
-    S.data, S.charKey, S.seasonKey, S.readOnly = data, charKey, seasonKey, false
+    local previous = { data = S.data, charKey = S.charKey, seasonKey = S.seasonKey, readOnly = S.readOnly,
+      swapped = S.swapped }
+    S.data, S.charKey, S.seasonKey, S.readOnly, S.swapped = data, charKey, seasonKey, false, true
     return function()
       S.data, S.charKey, S.seasonKey, S.readOnly = previous.data, previous.charKey, previous.seasonKey, previous.readOnly
+      S.swapped = previous.swapped
     end
   end,
+  -- Whether a scratch table is swapped in (Session._test.Hold needs one: a
+  -- held sample session saves its order into it, never into the player's)
+  Swapped = function() return S.swapped == true end,
   Limits = { chars = MAX_CHARS, seasons = MAX_SEASONS, history = MAX_HISTORY, capture = MAX_CAPTURE },
 }
