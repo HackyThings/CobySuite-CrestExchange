@@ -58,16 +58,15 @@ end
 
 -- The unopened packs in the bags that give a tier's crests, by product
 local function Held(obs, season, tierKey)
-  local list, crests = {}, 0
+  local list = {}
   for _, product in ipairs(season.products) do
     local count = product.to == tierKey and obs.packs and obs.packs[product.key] or 0
     if count > 0 then
       local yield = product.yield or 10
       list[#list + 1] = { key = product.key, itemID = product.itemID, count = count, yield = yield }
-      crests = crests + count * yield
     end
   end
-  return list, crests
+  return list
 end
 
 -- Open steps for `need` crests from held packs (fewest packs that cover it)
@@ -159,7 +158,7 @@ function Plan.Chain(obs, season, targetIndex, packs, opts)
       -- This tier's own packs make up what its balance lacks, opened first;
       -- what they give fills the tier's reserve before it can be spent
       local deficit = Deficit(obs, fromTier, opts)
-      local more, got = OpenSteps((Held(obs, season, fromTier.key)), req - avail + deficit, fromTier.key)
+      local more, got = OpenSteps(Held(obs, season, fromTier.key), req - avail + deficit, fromTier.key)
       if got > 0 then
         local ok, whyNot = OpensFit(obs, fromTier.key, got)
         if not ok then return nil, whyNot, fromTier.key end

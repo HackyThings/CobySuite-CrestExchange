@@ -1,6 +1,6 @@
 ## Interface: 120100
 ## Title: Coby's Crest Exchange
-## Version: 0.0.2
+## Version: 0.0.3
 ## Author: Cobanyte
 ## Notes: A better crest exchange at Vaskarn: see what you can convert, pick an amount, and convert in a few clicks.
 ## IconTexture: Interface\Icons\inv_121_crest_myth

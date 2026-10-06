@@ -38,7 +38,7 @@ local GAP = 10
 local ROWS = 6      -- spend rows (a plan spends up to four tiers) and the receive row
 local ROW_H = 20
 local LABEL_W = 84  -- "You receive" and the gap after it
-local HEAD_H = 14   -- the small "Balance after opening" heading over the rows
+local HEAD_H = 14   -- the small "Balance now to after opening" heading over the rows
 
 local S = { token = 0, armedFor = nil }
 
@@ -76,8 +76,6 @@ local function BuildCard(host)
   return card
 end
 
--- One "You spend" or "You receive" row; its hover is the crest's own
--- tooltip with what this exchange does to it
 -- Fills tip (GameTooltip on a hover, or a Verify grid tip) for one row's entry
 local function FillRowTooltip(tip, e)
   -- The game's currency tooltip only for a currency it knows: for one it
@@ -171,7 +169,7 @@ local function Build(host)
   local gray = U.Colors.LABEL_GRAY
   page.BalanceHead = page.Rows:CreateFontString(nil, "OVERLAY", U.Fonts.SMALL)
   page.BalanceHead:SetPoint("TOPRIGHT", page.Rows, "TOPRIGHT", -4, 0)
-  page.BalanceHead:SetText("Balance after opening")
+  page.BalanceHead:SetText("Balance now to after opening")
   page.BalanceHead:SetTextColor(gray[1], gray[2], gray[3])
   page.rows = {}
   for i = 1, ROWS do
@@ -297,7 +295,7 @@ local function FillRows(page, entries)
         row.Amount:SetPoint("LEFT", row, "LEFT", LABEL_W, 0)
       end
       row.Amount:SetText(e.text)
-      row.Balance:SetText(e.before and string.format("%s > %s", T.Count(e.before), T.Count(e.after)) or "")
+      row.Balance:SetText(e.before and T.Change(e.before, e.after) or "")
       row:EnableMouse(e.n ~= nil)
     end
   end
@@ -312,26 +310,32 @@ local function OtherBalances(ctx, plan, quote, entries)
   for _, tier in ipairs(ctx.season.tiers) do
     local before, after = BeforeAfter(plan, quote, tier.key)
     if before and not shown[tier.key] then
-      parts[#parts + 1] = string.format("%s %s > %s", T.Tier(ctx.season, tier.key), T.Count(before), T.Count(after))
+      parts[#parts + 1] = T.Tier(ctx.season, tier.key) .. " " .. T.Change(before, after)
     end
   end
   if #parts == 0 then return "" end
   return "Also after the packs open:  " .. table.concat(parts, "   ")
 end
 
+-- What the presses after Confirm look like: how many steps buy, whether
+-- Vaskarn is needed again, and how many packs open in all
 local function InfoText(ctx, steps, plan)
   local lines = {}
-  if plan and CobysCrestExchange.Plan.OpenOnly(plan) then
-    lines[#lines + 1] = "Nothing is bought: one press opens each of your packs. The window always shows the next press."
-  elseif plan then
-    lines[#lines + 1] = "Each step is bought, then its packs are opened, one press per pack, before the next step. The window always shows the next press."
-  else
-    lines[#lines + 1] = "After buying, open the packs with one press each."
+  local buys, opens, packs = 0, 0, 0
+  for _, s in ipairs(steps) do
+    packs = packs + (s.packs or 0)
+    if s.kind == "open" then opens = opens + 1 else buys = buys + 1 end
   end
+  -- The Get page's own wording, so both pages tell the same story
+  -- The packs to open join the same line, so a long plan keeps room for its cards
+  local flow = Views.Get.FlowWords(buys, opens)
+  if plan then flow = flow .. string.format(" %s to open in all.", T.Packs(packs)) end
+  lines[#lines + 1] = flow
   for _, s in ipairs(steps) do
     if s.down then
+      -- The refund banner under this says it can't be undone
       lines[#lines + 1] = U.WrapColor(U.Colors.CAUTION_ORANGE,
-        T.DownWarning(ctx.season, s.from, s.to, s.spend, s.packs * s.yield))
+        T.DownWarning(ctx.season, s.from, s.to, s.spend, s.packs * s.yield, true))
     end
   end
   if Seasons.CAPABILITIES.autoOpenAfterClose and Store.GetAutoOpen() then
@@ -340,16 +344,34 @@ local function InfoText(ctx, steps, plan)
   return table.concat(lines, "\n")
 end
 
+-- How many step cards show at once: up to VISIBLE, fewer when the rows and
+-- text under them need the room, so nothing runs under the banner (the rest
+-- scroll). Returns the count and whether it fits.
+local function FitCards(page, count)
+  local width = page.frame:GetWidth() - 8
+  local below = page.Rows:GetHeight() + 6
+  for _, fs in ipairs({ page.Note, page.Balances, page.Info }) do
+    fs:SetWidth(width)
+    if fs:IsShown() and (fs:GetText() or "") ~= "" then below = below + fs:GetStringHeight() + 8 end
+  end
+  local room = page.frame:GetHeight() - 44 - 10 - below - GAP - BANNER_H - (CONFIRM_MIN + CONFIRM_H + 8)
+  local shown = math.min(count, VISIBLE)
+  local function Need(n) return n * CARD_H + (count > n and MORE_H or 0) end
+  while shown > 1 and Need(shown) > room do shown = shown - 1 end
+  return shown, Need(shown) <= room
+end
+
 -- The refund banner and Confirm sit GAP below the text, or as low
 -- as Go back allows when the text is long. Confirm stays centered, away from
 -- the bottom-right corner where Review was pressed.
 local function PlaceBanner(page, count)
   local width = page.frame:GetWidth() - 8
-  local used = 44 + math.min(count, VISIBLE) * CARD_H + (count > VISIBLE and MORE_H or 0) + 10
+  local visible = page.visible or VISIBLE
+  local used = 44 + math.min(count, visible) * CARD_H + (count > visible and MORE_H or 0) + 10
   used = used + page.Rows:GetHeight() + 6
   for _, fs in ipairs({ page.Note, page.Balances, page.Info }) do
     fs:SetWidth(width)
-    if (fs:GetText() or "") ~= "" then used = used + fs:GetStringHeight() + 8 end
+    if fs:IsShown() and (fs:GetText() or "") ~= "" then used = used + fs:GetStringHeight() + 8 end
   end
   -- the banner's bottom, measured up from the page's bottom
   local below = page.frame:GetHeight() - used - GAP - BANNER_H
@@ -401,31 +423,13 @@ function page:Refresh(ctx)
   local steps, plan = Steps(view, quote)
   if #steps == 0 then return end
   self.current = plan and plan.fingerprint or (quote and quote.fingerprint)
-  self.Title:SetText(plan and string.format("Review: %s in %d steps", T.Crests(ctx.season, plan.target, plan.crests), #steps)
+  self.Title:SetText(plan and string.format("Review: %s in %d %s", T.Crests(ctx.season, plan.target, plan.crests), #steps,
+      T.Plural(#steps, "step", "steps"))
     or string.format("Review: %s", T.Crests(ctx.season, quote.destTier, quote.crests)))
   FillCards(self, ctx, steps)
   local count = math.min(#steps, CARDS)
   self.shown = count
   self.List:SetWidth(self.frame:GetWidth())
-  self.Scroll:SetHeight(math.min(count, VISIBLE) * CARD_H)
-  -- A new review starts at the top; the same one keeps its place as it refreshes
-  if self.scrolledFor ~= self.current then
-    self.scrolledFor = self.current
-    self.Scroll:SetVerticalScroll(0)
-  else
-    local most = math.max(0, count * CARD_H - self.Scroll:GetHeight())
-    self.Scroll:SetVerticalScroll(math.min(most, self.Scroll:GetVerticalScroll()))
-  end
-  local more = count > VISIBLE
-  self.More:SetShown(more)
-  if more then self.More:SetText(string.format("Scroll for steps %d to %d", VISIBLE + 1, count)) end
-  self.Rows:ClearAllPoints()
-  if more then
-    self.Rows:SetPoint("TOPLEFT", self.More, "BOTTOMLEFT", 0, -6)
-  else
-    self.Rows:SetPoint("TOPLEFT", self.Scroll, "BOTTOMLEFT", 4, -6)
-  end
-  self.Rows:SetPoint("RIGHT", self.frame, "RIGHT", -4, 0)
   local entries = Entries(ctx, plan, quote)
   FillRows(self, entries)
   -- Under the rows: a plan's note, then any other balance that changes
@@ -447,6 +451,40 @@ function page:Refresh(ctx)
   self.Info:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, -8)
   self.Info:SetPoint("RIGHT", self.frame, "RIGHT", -4, 0)
   self.Info:SetText(InfoText(ctx, steps, plan))
+  local visible, fits = FitCards(self, count)
+  if (not fits or visible < math.min(count, 2)) and self.Note:IsShown() then
+    -- Too tall, or room for only one of several cards: the plan's side note
+    -- gives way first (a plan's steps matter more), and the balances line
+    -- folds up after it
+    self.Note:Hide()
+    self.Balances:ClearAllPoints()
+    self.Balances:SetPoint("TOPLEFT", self.Rows, "BOTTOMLEFT", 0, -6)
+    self.Balances:SetPoint("RIGHT", self.frame, "RIGHT", -4, 0)
+    self.Info:ClearAllPoints()
+    self.Info:SetPoint("TOPLEFT", self.Balances:IsShown() and self.Balances or self.Rows, "BOTTOMLEFT", 0, -8)
+    self.Info:SetPoint("RIGHT", self.frame, "RIGHT", -4, 0)
+    visible = FitCards(self, count)
+  end
+  self.visible = visible
+  self.Scroll:SetHeight(visible * CARD_H)
+  -- A new review starts at the top; the same one keeps its place as it refreshes
+  if self.scrolledFor ~= self.current then
+    self.scrolledFor = self.current
+    self.Scroll:SetVerticalScroll(0)
+  else
+    local most = math.max(0, count * CARD_H - self.Scroll:GetHeight())
+    self.Scroll:SetVerticalScroll(math.min(most, self.Scroll:GetVerticalScroll()))
+  end
+  local more = count > visible
+  self.More:SetShown(more)
+  if more then self.More:SetText(string.format("Scroll for steps %d to %d", visible + 1, count)) end
+  self.Rows:ClearAllPoints()
+  if more then
+    self.Rows:SetPoint("TOPLEFT", self.More, "BOTTOMLEFT", 0, -6)
+  else
+    self.Rows:SetPoint("TOPLEFT", self.Scroll, "BOTTOMLEFT", 4, -6)
+  end
+  self.Rows:SetPoint("RIGHT", self.frame, "RIGHT", -4, 0)
   PlaceBanner(self, #steps)
   local spendText = plan and "Confirm: start the plan" or ("Confirm: spend " .. T.Count(quote.spend) .. " " .. T.TierLabel(ctx.season, quote.sourceTier))
   self.Confirm:SetText(spendText)

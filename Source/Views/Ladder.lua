@@ -13,11 +13,14 @@
 -- animations only play or stop later, so nothing is built in combat.
 --
 --   local ladder = Ladder.Create(parent, { top = -40, nodeH = 40, gap = 26,
---     nodeW = 210, onClick = function(tierKey) end, onSpend = function(tierKey, on) end })
+--     onClick = function(tierKey) end, onSpend = function(tierKey, on) end })
 --   ladder:Render({
 --     season = season,
 --     nodes = { [tierKey] = { value = "120", valueColor = {r,g,b}, sub = "Room 45", icon = fileID,
---                             glow = bool, dim = bool, spend = nil|true|false } },
+--                             glow = bool, dim = bool, spend = nil|true|false,
+--                             meter = nil|{ frac, packed, full, used, limit, label } (a cap meter behind
+--                             the text; a full one also gets a still check and MAX in the status column,
+--                             Task #269) } },
 --     links = { [upperTierKey] = { state = "idle"|"locked"|"pending"|"current"|"done", label = "...",
 --                                  down = true for a trade down (the arrow and dots point down),
 --                                  tooltip = function(tip), onClick = function() } },
@@ -44,30 +47,129 @@ local RGB = CobySuite_CobysCrestExchange.Utilities.HexToRGB
 -------------------------------------------------------------------------------
 -- Building
 -------------------------------------------------------------------------------
+local METER_INSET = 3   -- inside the CONTENT backdrop's edge
+-- The cap meter's fills (Task #269): a part-filled bar, the unopened packs' band
+-- after it, and a full cap's whole bar
+local METER_ALPHA, PACKS_ALPHA, FULL_ALPHA = 0.16, 0.08, 0.22
+-- A tall tile's columns, from its right edge: the count and its "Held" caption,
+-- then the status (check and MAX) in a region reserved on every tile so it never
+-- moves with the count's width
+local NAME_X, NAME_TOP, DETAIL_TOP, STATUS_FROM_RIGHT = 44, -6, -23, -80
+local COUNT_W, STATUS_W = 64, 48
+local TALL_NAME_RIGHT, TALL_DETAIL_RIGHT = -136, -84
+local SAGE = U.Colors.SAGE_GREEN
+local SHADOW = { 0, 0, 0, 0.85 }
+
+-- The meter's widths from the tile's width now (the floating window resizes);
+-- a width of 0 can't be set, so an empty part hides. A full cap fills the whole
+-- bar and has no packs band
+local function SizeMeter(node)
+  local m = node.meter
+  local width = (node:GetWidth() or 0) - 2 * METER_INSET
+  if not m or width <= 0 then
+    node.Meter:Hide()
+    node.MeterPacks:Hide()
+    return
+  end
+  local fill, packs = width * (m.full and 1 or m.frac), m.full and 0 or width * m.packed
+  node.Meter:SetWidth(math.max(0.01, fill))
+  node.Meter:SetShown(fill >= 1)
+  node.MeterPacks:SetWidth(math.max(0.01, packs))
+  node.MeterPacks:SetShown(packs >= 1)
+end
+
+local function Shadowed(text)
+  text:SetShadowColor(SHADOW[1], SHADOW[2], SHADOW[3], SHADOW[4])
+  text:SetShadowOffset(1, -1)
+end
+
+-- One line, never wrapped or shrunk; the tooltip holds the full figures
+local function OneLine(text, justify)
+  text:SetJustifyH(justify)
+  text:SetWordWrap(false)
+end
+
+-- A tall tile's layout (the overview, 40 high): name over the detail line on the
+-- left, the held count over its caption on the right, and the status region
+-- between them
+local function BuildTallLayout(node)
+  node.Name:SetPoint("TOPLEFT", node, "TOPLEFT", NAME_X, NAME_TOP)
+  node.Name:SetPoint("TOPRIGHT", node, "TOPRIGHT", TALL_NAME_RIGHT, NAME_TOP)
+  node.Name:SetHeight(14)
+  node.Sub:SetPoint("TOPLEFT", node, "TOPLEFT", NAME_X, DETAIL_TOP)
+  node.Sub:SetPoint("TOPRIGHT", node, "TOPRIGHT", TALL_DETAIL_RIGHT, DETAIL_TOP)
+  node.Sub:SetHeight(12)
+  node.Value:SetPoint("TOPRIGHT", node, "TOPRIGHT", -10, -4)
+  node.Value:SetSize(COUNT_W, 18)
+  node.Held = node:CreateFontString(nil, "OVERLAY", U.Fonts.DATA)
+  node.Held:SetPoint("TOPRIGHT", node, "TOPRIGHT", -10, DETAIL_TOP)
+  node.Held:SetSize(COUNT_W, 12)
+  node.Held:SetText(Views.Text.HELD_CAPTION)
+  node.Held:SetTextColor(U.Colors.LABEL_GRAY[1], U.Colors.LABEL_GRAY[2], U.Colors.LABEL_GRAY[3])
+  node.Status = CreateFrame("Frame", nil, node)
+  node.Status:SetSize(STATUS_W, 14)
+  node.Status:SetPoint("RIGHT", node, "RIGHT", STATUS_FROM_RIGHT, 0)
+  node.Check = node:CreateTexture(nil, "ARTWORK")
+  node.Check:SetAtlas("checkmark-minimal", false)
+  node.Check:SetSize(14, 14)
+  node.Check:SetPoint("LEFT", node.Status, "LEFT", 0, 0)
+  node.Check:SetDesaturated(true)
+  node.Check:SetVertexColor(SAGE[1], SAGE[2], SAGE[3], 1)
+  node.Check:Hide()
+  node.MaxText = node:CreateFontString(nil, "OVERLAY", U.Fonts.BODY)
+  -- Height only: a fixed width cut the word to "M..." in game (Task #269); with
+  -- one anchor the string sizes to its text, which fits the status region
+  node.MaxText:SetHeight(14)
+  node.MaxText:SetPoint("LEFT", node.Check, "RIGHT", 4, 0)
+  node.MaxText:SetJustifyV("MIDDLE")
+  node.MaxText:SetText(Views.Text.MAX_BADGE)
+  node.MaxText:SetTextColor(SAGE[1], SAGE[2], SAGE[3], 1)
+  node.MaxText:Hide()
+  for _, text in ipairs({ node.Name, node.Sub, node.Value, node.Held, node.MaxText }) do Shadowed(text) end
+  OneLine(node.Name, "LEFT")
+  OneLine(node.Sub, "LEFT")
+  OneLine(node.Value, "RIGHT")
+  OneLine(node.Held, "RIGHT")
+  OneLine(node.MaxText, "LEFT")
+end
+
 local function BuildNode(ladder, parent, opts)
   local node = CreateFrame("Button", nil, parent, "BackdropTemplate")
   node:SetHeight(opts.nodeH)
-  if opts.nodeW then node:SetWidth(opts.nodeW) end
   node:SetBackdrop(U.Backdrops.CONTENT)
-  node:SetBackdropColor(0.06, 0.06, 0.08, 0.95)
+  node.tall = opts.nodeH >= 34
+  local bg = node.tall and U.Colors.WINDOW_BG or { 0.06, 0.06, 0.08, 0.95 }
+  node.border = node.tall and U.Colors.CONTENT_BORDER or { 0.4, 0.4, 0.4, 0.9 }
+  node:SetBackdropColor(bg[1], bg[2], bg[3], bg[4])
   node.Icon = node:CreateTexture(nil, "ARTWORK")
   node.Icon:SetSize(opts.nodeH - 10, opts.nodeH - 10)
   node.Icon:SetPoint("LEFT", 6, 0)
   node.Icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
   node.Name = node:CreateFontString(nil, "OVERLAY", U.Fonts.BODY)
   node.Sub = node:CreateFontString(nil, "OVERLAY", U.Fonts.DATA)
-  if opts.nodeH < 34 then
+  node.Value = node:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
+  local lg = node.tall and U.Colors.LIGHT_GRAY or { 0.75, 0.75, 0.75 }
+  node.Sub:SetTextColor(lg[1], lg[2], lg[3])
+  if node.tall then
+    BuildTallLayout(node)
+  else
     -- A compact tile: the name and the line under it share one line
     node.Name:SetPoint("LEFT", node.Icon, "RIGHT", 8, 0)
     node.Sub:SetPoint("LEFT", node.Name, "RIGHT", 10, 0)
-  else
-    node.Name:SetPoint("TOPLEFT", node.Icon, "TOPRIGHT", 8, -1)
-    node.Sub:SetPoint("BOTTOMLEFT", node.Icon, "BOTTOMRIGHT", 8, 1)
+    node.Value:SetPoint("RIGHT", -10, 0)
+    node.Value:SetJustifyH("RIGHT")
   end
-  node.Sub:SetTextColor(0.75, 0.75, 0.75)
-  node.Value = node:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
-  node.Value:SetPoint("RIGHT", -10, 0)
-  node.Value:SetJustifyH("RIGHT")
+  -- A cap meter behind the tile's text (the overview, Task #247): the cap
+  -- used in the tier's color, then a fainter band for unopened crests
+  node.Meter = node:CreateTexture(nil, "BACKGROUND", nil, 2)
+  node.Meter:SetPoint("TOPLEFT", METER_INSET, -METER_INSET)
+  node.Meter:SetPoint("BOTTOMLEFT", METER_INSET, METER_INSET)
+  node.Meter:Hide()
+  node.MeterPacks = node:CreateTexture(nil, "BACKGROUND", nil, 2)
+  node.MeterPacks:SetPoint("TOPLEFT", node.Meter, "TOPRIGHT", 0, 0)
+  node.MeterPacks:SetPoint("BOTTOMLEFT", node.Meter, "BOTTOMRIGHT", 0, 0)
+  node.MeterPacks:Hide()
+  node:HookScript("OnSizeChanged", function(self) SizeMeter(self) end)
   -- A soft pulse behind the tile for the tier you're after
   node.Glow = node:CreateTexture(nil, "BACKGROUND", nil, 1)
   node.Glow:SetPoint("TOPLEFT", 3, -3)
@@ -156,7 +258,7 @@ end
 
 function Ladder.Create(parent, opts)
   opts = opts or {}
-  -- nodeW nil: the tiles span the ladder's width
+  -- The tiles span the ladder's width
   opts.nodeH, opts.gap, opts.top = opts.nodeH or 40, opts.gap or 26, opts.top or 0
   local ladder = { opts = opts, nodes = {}, links = {} }
   ladder.frame = CreateFrame("Frame", nil, parent)
@@ -167,7 +269,7 @@ function Ladder.Create(parent, opts)
   for i = 5, 1, -1 do
     local node = BuildNode(ladder, ladder.frame, opts)
     node:SetPoint("TOPLEFT", ladder.frame, "TOPLEFT", 0, -(5 - i) * (opts.nodeH + opts.gap))
-    if not opts.nodeW then node:SetPoint("RIGHT", ladder.frame, "RIGHT", -2, 0) end
+    node:SetPoint("RIGHT", ladder.frame, "RIGHT", -2, 0)
     ladder.nodes[i] = node
   end
   for i = 2, 5 do ladder.links[i] = BuildLink(ladder.frame, ladder.nodes[i - 1], ladder.nodes[i], opts) end
@@ -183,19 +285,33 @@ local function DrawNode(node, season, tier, data)
   local r, g, b = RGB(hex)
   node.Icon:SetTexture(data.icon or FALLBACK_ICON)
   node.Icon:SetDesaturated(data.dim == true)
+  local m = data.meter
+  node.meter = m
+  -- A cap reached is the meter's say (full), never a guess from the bar
+  local capped = m ~= nil and m.full == true
   node.Name:SetText(U.WrapColor(hex, tier.label))
-  node.Sub:SetText(data.sub or "")
+  node.Sub:SetText(m and Views.Text.MeterLine(m) or data.sub or "")
   node.Value:SetText(data.value or "")
   local vc = data.valueColor
   if vc then node.Value:SetTextColor(vc[1], vc[2], vc[3]) else node.Value:SetTextColor(WHITE[1], WHITE[2], WHITE[3]) end
   node:SetAlpha(data.dim and 0.55 or 1)
+  if m then
+    node.Meter:SetColorTexture(r, g, b, capped and FULL_ALPHA or METER_ALPHA)
+    node.MeterPacks:SetColorTexture(r, g, b, PACKS_ALPHA)
+  end
+  SizeMeter(node)
+  if node.Check then
+    node.Check:SetShown(capped)
+    node.MaxText:SetShown(capped)
+  end
+  local border = node.border
   if data.glow then
     node:SetBackdropBorderColor(r, g, b, 1)
     node.Glow:SetColorTexture(r, g, b, 1)
     node.Glow:Show()
     if not node.GlowAnim:IsPlaying() then node.GlowAnim:Play() end
   else
-    node:SetBackdropBorderColor(0.4, 0.4, 0.4, 0.9)
+    node:SetBackdropBorderColor(border[1], border[2], border[3], border[4])
     node.GlowAnim:Stop()
     node.Glow:Hide()
   end
@@ -269,7 +385,7 @@ function Ladder:Render(model)
   end
 end
 
--- Stop every animation (the page hides)
+-- Stop every animation (the ladder is no longer shown)
 function Ladder:StopAll()
   for _, node in ipairs(self.nodes) do node.GlowAnim:Stop() end
   for i = 2, 5 do

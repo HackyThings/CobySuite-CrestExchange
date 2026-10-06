@@ -26,7 +26,7 @@ local function Num(v)
   return v
 end
 
--- Redundancy slots checked for the unlock, lowest first after sorting
+-- Redundancy slots read for the unlock (the result rows are sorted lowest first)
 local SLOT_ORDER = { "Head", "Neck", "Shoulder", "Cloak", "Chest", "Wrist", "Hand", "Waist", "Legs", "Feet",
   "Finger", "Trinket", "Twohand", "MainhandWeapon", "OnehandWeapon", "OnehandWeaponSecond", "Offhand" }
 local WEAPON_SLOTS = { Twohand = true, MainhandWeapon = true, OnehandWeapon = true, OnehandWeaponSecond = true, Offhand = true }
@@ -40,12 +40,12 @@ local function WeaponBest(byName, field)
   return math.max(At("Twohand"), pair)
 end
 
--- rows { { slot, char, account, ok, weapon } }, weaponsOk, known, weapons
+-- rows { { slot, char, account, ok, weapon } }, weaponsOk, weapons
 -- (weapons = { char, account }: the best weapon set, see WeaponBest)
 function Eligibility.Watermarks(threshold)
   local enum = Seams.Call("RedundancySlots")
   local rows, byName = {}, {}
-  if type(enum) ~= "table" then return rows, nil, false end
+  if type(enum) ~= "table" then return rows end
   for _, name in ipairs(SLOT_ORDER) do
     local value = enum[name]
     if value ~= nil then
@@ -66,7 +66,7 @@ function Eligibility.Watermarks(threshold)
   end
   table.sort(rows, function(a, b) return (a.char or -1) < (b.char or -1) end)
   local weapons = { char = WeaponBest(byName, "char"), account = WeaponBest(byName, "account") }
-  return rows, weaponsOk, true, weapons
+  return rows, weaponsOk, weapons
 end
 
 local function AchievementReason(unlock)
@@ -79,7 +79,7 @@ local function AchievementReason(unlock)
     local text, done = Seams.Call("CriteriaInfo", unlock.achievementID, i)
     if type(text) == "string" and text ~= "" and not done then criteria[#criteria + 1] = text end
   end
-  local rows, weaponsOk, _, weapons = Eligibility.Watermarks(unlock.threshold)
+  local rows, weaponsOk, weapons = Eligibility.Watermarks(unlock.threshold)
   return {
     kind = "achievement", id = unlock.achievementID, name = name,
     completed = completed == true, earnedByMe = earnedByMe == true,
@@ -153,7 +153,7 @@ function Eligibility.TierCurrency(season, tierKey)
   end
 end
 
--- Every trade of the season with its state, for "Why are trades locked?"
+-- Every trade of the season with its state, for the Trade requirements list
 function Eligibility.All(season, obs)
   local list = {}
   for _, product in ipairs(season.products) do

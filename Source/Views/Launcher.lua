@@ -32,7 +32,6 @@ local launcher = CobySuite_CobysCrestExchange.UI.CreateLauncher({
   compartmentTooltipAnchor = "ANCHOR_LEFT",
   tooltip = TooltipOpts,
 })
-Launcher.launcher = launcher
 
 function CobysCrestExchange_OnAddonCompartmentClick(_, button)
   launcher:OnCompartmentClick(button)

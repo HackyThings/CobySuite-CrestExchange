@@ -9,7 +9,7 @@
 -- its requirements):
 --   * trade up from the tier below      "Spend 60 Hero (2 packs)"
 --   * trade down from the tier above
---   * a plan using every lower tier     "Spends 30 Hero, 90 Champion in 2 steps"
+--   * a plan using every lower tier     "Spend 30 Hero, 90 Champion in 2 steps"
 -- A route that can't reach the amount says why, and a locked trade opens its
 -- requirements when clicked. A route that works is chosen for you (the plan
 -- first, then a trade up) and highlighted; clicking another chooses it. Under the routes, a small path
@@ -66,7 +66,7 @@ local function TradeRoute(ctx, product)
   local q = Quote.Build(ctx.obs, { productKey = product.key, crests = S.crests }, Quote.Controller.Options(ctx.obs, product))
   route.open = result.state == "available" or (result.state == "away" and q.offer ~= nil)
   if not route.open then
-    route.line, route.locked = Reason(result), result.state == "locked"
+    route.line, route.locked, route.state = Reason(result), result.state == "locked", result.state
     return route
   end
   route.quote, route.max, route.yield = q, q.maxCrests or 0, q.yield
@@ -102,8 +102,7 @@ local function Away(ctx) return not (ctx.obs.merchant and ctx.obs.merchant.isExc
 
 -- A plan's trades end with the trade up into the target, so the plan route
 -- inherits that trade's locked, not_offered or unsupported result (only a
--- locked one shows a lock and opens the requirements), unless this tier's own
--- unopened packs can still be opened: then the plan stays usable up to them
+-- locked one shows a lock and opens the requirements)
 local function PlanGate(ctx, tierKey)
   for _, product in ipairs(Seasons.TradesInto(ctx.season, tierKey)) do
     if product.kind == "up" then
@@ -119,13 +118,19 @@ local function PlanRoute(ctx, tierKey)
   local season = ctx.season
   local t = ctx.obs.tiers[tierKey]
   local route = { key = "plan", kind = "plan", open = true, icon = t and t.currency.icon or 134400,
-    title = "Use every lower tier" }
+    title = "Plan from lower tiers" }
   local top, gate = PlanGate(ctx, tierKey)
   local plan = Plan.Build(ctx.obs, tierKey, S.crests, PlanOptions(ctx, tierKey))
   if top and (plan.maxCrests or 0) == 0 then
     -- The trade up is out and none of this tier's own packs are there to open
-    route.open, route.locked, route.reqKey, route.max = false, gate.state == "locked", top.key, 0
+    route.open, route.locked, route.reqKey, route.max, route.state = false, gate.state == "locked", top.key, 0, gate.state
     route.line = Reason(gate)
+    return route
+  end
+  if Away(ctx) and (plan.maxCrests or 0) == 0 and plan.limiter == "unavailable" then
+    -- Never seen at Vaskarn, and no packs of its own to open: closed until a visit
+    route.open, route.max, route.state = false, 0, "away"
+    route.line = "None yet: " .. T.PlanLimiter(plan, season, true, ctx.obs)
     return route
   end
   local said = string.format("Plan into %s: max %s, stopped by %s in %s", tierKey, tostring(plan.maxCrests),
@@ -148,7 +153,7 @@ local function PlanRoute(ctx, tierKey)
       -- Trades paid for by packs you open on the way: no balance goes down
       route.line = string.format("Opens your packs and trades in %d %s, no balance goes down", #plan.steps, T.Plural(#plan.steps, "step", "steps"))
     else
-      route.line = string.format("Spends %s in %d %s", table.concat(parts, ", "), #plan.steps, T.Plural(#plan.steps, "step", "steps"))
+      route.line = string.format("Spend %s in %d %s", table.concat(parts, ", "), #plan.steps, T.Plural(#plan.steps, "step", "steps"))
     end
   elseif top then
     -- Only this tier's own packs can be opened: the trade up is out
@@ -182,7 +187,17 @@ local function Routes(ctx, tierKey)
   for _, product in ipairs(Seasons.TradesInto(ctx.season, tierKey)) do
     if product.kind == "down" then downs[#downs + 1] = product else list[#list + 1] = TradeRoute(ctx, product) end
   end
-  if (Seasons.TierIndex(ctx.season, tierKey) or 0) >= 3 then list[#list + 1] = PlanRoute(ctx, tierKey) end
+  if (Seasons.TierIndex(ctx.season, tierKey) or 0) >= 3 then
+    local plan = PlanRoute(ctx, tierKey)
+    -- A plan that is just the trade up says so, so two tiles don't seem to differ
+    local step = plan.ok and #plan.plan.steps == 1 and plan.plan.steps[1]
+    for _, r in ipairs(list) do
+      if step and step.kind ~= "open" and r.ok and r.product.from == step.from and r.quote.packs == step.packs then
+        plan.line = string.format("Spend %s. Same as the trade up.", T.Crests(ctx.season, step.from, r.quote.spend))
+      end
+    end
+    list[#list + 1] = plan
+  end
   for _, product in ipairs(downs) do
     if #list < TILES then list[#list + 1] = TradeRoute(ctx, product) end
   end
@@ -190,24 +205,12 @@ local function Routes(ctx, tierKey)
 end
 
 -- The chosen route (Plan.ChooseRoute): the player's while it works, else the
--- plan, else a trade up; never a trade down
+-- plan, else a trade up, else the open route that gives the most; never a trade down
 local function Choose(routes)
   return Plan.ChooseRoute(routes, S.route, S.crests ~= nil)
 end
 
--- Why nothing can be made into a tier: its cap first (it stops every route),
--- else the reason of the route that would be used
-local function NothingReason(page, ctx, tierKey, chosen)
-  local t = ctx.obs.tiers[tierKey]
-  if T.Capped(t, page.yield) then return T.CapSentence(ctx.season, tierKey, t, page.yield) end
-  local r = chosen
-  if not r then
-    for _, route in ipairs(page.routes or {}) do if route.open and not route.down then r = route; break end end
-  end
-  return r and RouteWhy(r, page) or ""
-end
-
--- What can still be done when a tier is at its cap
+-- What can still be done when a tier is at MAX or has no room for a pack
 local function StillWorks(page, ctx, tierKey)
   local out, season = {}, ctx.season
   local t = ctx.obs.tiers[tierKey]
@@ -218,10 +221,10 @@ local function StillWorks(page, ctx, tierKey)
     if fit >= t.packs then
       out[#out + 1] = string.format("Your %s can still open: use the Open packs banner above.", packs)
     elseif fit > 0 then
-      out[#out + 1] = string.format("%s of your %s can open now (use the Open packs banner above); the rest wait until the cap rises.",
-        T.Count(fit), packs)
+      out[#out + 1] = string.format("%s of your %s can open now (use the Open packs banner above); the rest wait until %s.",
+        T.Count(fit), packs, T.WaitFor(t))
     else
-      out[#out + 1] = string.format("Your %s wait in your bags until the cap rises.", packs)
+      out[#out + 1] = string.format("Your %s wait in your bags until %s.", packs, T.WaitFor(t))
     end
   end
   -- Trading this tier up still works only if that trade really can run now
@@ -259,7 +262,7 @@ local function PathStops(ctx, route, tierKey)
   end
   local plan = route.plan
   if not route.ok then
-    -- No amount yet: every tier the plan may spend, up to the target
+    -- The chosen plan can't give this amount exactly: every tier it may spend, up to the target
     local spend, started = Views.Plan.state.spend or {}, false
     for _, tier in ipairs(Plan.SourceTiers(ctx.season, tierKey)) do
       started = started or spend[tier.key] == true
@@ -314,8 +317,12 @@ local function BuildAmount(host, page)
   page.Unit:SetPoint("LEFT", page.Input, "RIGHT", 8, 0)
   page.Max = UI.CreateButton(host, { text = "Max", size = { 46, 22 }, point = { "TOPRIGHT", host, "TOPRIGHT", -2, -42 },
     onClick = function() if (page.best or 0) > 0 then SetCrests(page.best) end end })
+  page.Max:SetMotionScriptsWhileDisabled(true)
   UI.AddDynamicTooltip(page.Max, function(tip)
     tip:AddLine("Max: " .. T.Count(page.best or 0))
+    if page.downRoute and (page.best or 0) == 0 then
+      tip:AddLine("A trade down counts only once you choose it: type an amount, then click it.", 1, 1, 1, true)
+    end
     local r = page.bestRoute
     if r then
       local why = RouteWhy(r, page)
@@ -463,11 +470,14 @@ local function FillTile(tile, route, chosen, waiting)
   tile.Icon:SetTexture(route.icon)
   tile.Title:SetText(route.title)
   local line = route.line or ""
-  if route.open and not route.ok and (S.crests or route.blocked) then line = U.WrapColor(U.Colors.CAUTION_ORANGE, line) end
-  if not route.open or waiting then line = U.WrapColor(U.Colors.LABEL_GRAY, line) end
+  if route.open and not route.ok and (S.crests or route.blocked) then line = T.Tint(U.Colors.CAUTION_ORANGE, line) end
+  if not route.open or waiting then line = T.Tint(U.Colors.LABEL_GRAY, line) end
   tile.Line:SetText(line)
   local selected = chosen == route
-  tile.Glow:SetShown(selected)
+  -- Lit only when it can give the amount: a fallback pick that gives nothing
+  -- (it names the limit in Max's tooltip) isn't shown as the way (Task #236)
+  local lit = selected and route.ok
+  tile.Glow:SetShown(lit)
   tile.Adjust:SetShown(route.kind == "plan" and selected)
   if route.locked then
     tile.Badge:SetAtlas("AdventureMapIcon-Lock"); tile.Badge:Show()
@@ -486,7 +496,7 @@ local function FillTile(tile, route, chosen, waiting)
     tile:SetBackdropBorderColor(0.35, 0.35, 0.35, 0.8)
   elseif route.down and route.open then
     tile:SetBackdropBorderColor(orange[1], orange[2], orange[3], selected and 1 or 0.7)
-  elseif selected then
+  elseif lit then
     tile:SetBackdropBorderColor(GOLD[1], GOLD[2], GOLD[3], 1)
   else
     tile:SetBackdropBorderColor(0.35, 0.35, 0.35, 0.8)
@@ -505,6 +515,7 @@ local function RefreshAmount(page, ctx, tierKey, routes, chosen)
     yield = yield or r.yield
   end
   page.best, page.bestRoute, page.yield, page.season, page.away = best, bestRoute, yield or 10, ctx.season, Away(ctx)
+  page.Max:SetEnabled(best > 0)
   page.routes, page.obs, page.downRoute = routes, ctx.obs, downRoute
   if not page.Input:HasFocus() then page.Input:SetCommittedValue(S.crests) end
   page.Unit:SetText("more " .. T.Tier(ctx.season, tierKey))
@@ -514,7 +525,7 @@ local function RefreshAmount(page, ctx, tierKey, routes, chosen)
   if not between then return 0 end
   local down, up = math.floor(S.crests / page.yield) * page.yield, math.ceil(S.crests / page.yield) * page.yield
   r.down, r.up = down > 0 and down or nil, up
-  r.Text:SetText(string.format("Packs hold %s. Choose", T.Count(page.yield)))
+  r.Text:SetText(string.format("%s per pack. Choose:", T.Count(page.yield)))
   r.Down:SetShown(r.down ~= nil); r.Down:SetText(T.Count(down))
   r.Up:SetText(T.Count(up))
   return 22
@@ -525,10 +536,15 @@ local function RefreshExisting(page, ctx, tierKey, y)
   existing.productKey = nil
   local t = ctx.obs.tiers[tierKey]
   if t and t.packs > 0 and not ctx.view.order then
+    -- The button opens one kind of pack, so the line counts that kind only
     for _, product in ipairs(Seasons.TradesInto(ctx.season, tierKey)) do
-      if (ctx.obs.packs[product.key] or 0) > 0 then existing.productKey = product.key end
+      local n = ctx.obs.packs[product.key] or 0
+      if n > 0 and not existing.productKey then
+        existing.productKey = product.key
+        existing.Text:SetText(string.format("%s ready to open: %s. Open them first.", T.Packs(n),
+          T.Crests(ctx.season, tierKey, n * product.yield)))
+      end
     end
-    existing.Text:SetText(string.format("%s (%s) unopened. Open them first.", T.Packs(t.packs), T.Crests(ctx.season, tierKey, t.packedCrests)))
   end
   existing:SetShown(existing.productKey ~= nil)
   if not existing:IsShown() then return y end
@@ -541,28 +557,104 @@ end
 local LINE_H = 14        -- a small-font summary line with its spacing
 local BUTTONS_TOP = -352 -- where Back and Review begin, from the page's top
 
+local function Warn(text) return T.Tint(U.Colors.CAUTION_ORANGE, text) end
+
+-- Nothing can be made by trading up: the cap if that is why (it stops every
+-- route), else a pointer to the routes' own reasons; what still works; and
+-- how to reach a trade down, which is never chosen for you
+local function NoneLines(page, ctx, tierKey, lines)
+  local t = ctx.obs.tiers[tierKey]
+  if T.Capped(t, page.yield) then
+    lines[#lines + 1] = Warn(T.CapSentence(ctx.season, tierKey, t, page.yield))
+  else
+    lines[#lines + 1] = Warn(page.downRoute and "Trading up can't give you any right now: each route says why."
+      or "No exchange can give you more of this tier right now: each route says why.")
+  end
+  for _, line in ipairs(StillWorks(page, ctx, tierKey)) do lines[#lines + 1] = line end
+  local d = page.downRoute
+  if d then
+    local from = T.Tier(ctx.season, d.product.from)
+    if S.crests and d.max < S.crests then
+      lines[#lines + 1] = string.format("Trade down from %s can give up to %s. Lower the amount to choose it.", from,
+        T.Crests(ctx.season, tierKey, d.max))
+      return
+    end
+    lines[#lines + 1] = S.crests
+      and string.format("Trade down from %s could give up to %s. It spends a higher tier one for one, so choose it only if you mean to.",
+        from, T.Crests(ctx.season, tierKey, d.max))
+      or string.format("To trade down, type an amount, then choose Trade down from %s. It spends a higher tier one for one.", from)
+  end
+end
+
+-- Every route closed: why, by what closed them
+local function ClosedLine(routes)
+  local locked, away, unsupported = false, false, false
+  for _, r in ipairs(routes or {}) do
+    if r.locked then locked = true
+    elseif r.state == "away" then away = true
+    elseif r.state == "unsupported" then unsupported = true end
+  end
+  if locked then return "No trade into this tier is open to you yet. Click a locked one to see what it needs." end
+  if away and not unsupported then return "Visit Vaskarn in Silvermoon to see his trades and prices." end
+  if unsupported and not away then return "This version can't buy these packs yet: use Vaskarn's own list." end
+  return "No trade into this tier is open right now: each one says why."
+end
+
+-- What the presses after buying look like (shared with Review's wording):
+-- packs you already have need no purchase; several purchases each need
+-- Vaskarn's window again
+local function FlowWords(buys, opens)
+  local close = Seasons.CAPABILITIES.openAtVendor and "open each pack with one press"
+    or "close Vaskarn's window and open each pack with one press"
+  local own = opens > 0 and "Packs you already have need no purchase. " or ""
+  if buys == 0 then return "Nothing is bought: one press opens each of your packs." end
+  if buys > 1 then
+    -- Kept short: Review adds the pack count to this line on a docked panel
+    return own .. (Seasons.CAPABILITIES.openAtVendor
+      and "For each purchase: buy, open the packs, then talk to Vaskarn again."
+      or "For each purchase: buy, close Vaskarn's window, open the packs, then talk to him again.")
+  end
+  return own .. "After buying, " .. close .. "."
+end
+Get.FlowWords = FlowWords
+
+local function PlanFlow(plan)
+  local buys, opens = 0, 0
+  for _, step in ipairs(plan.steps) do
+    if step.kind == "open" then opens = opens + 1 else buys = buys + 1 end
+  end
+  return FlowWords(buys, opens)
+end
+
+-- The lines every summary ends with: where to go, and a refused buy
+local function Finish(lines, ctx, chosen, skipVisit)
+  local openOnly = chosen and chosen.ok and chosen.kind == "plan" and Plan.OpenOnly(chosen.plan)
+  if not skipVisit and not openOnly and not (ctx.obs.merchant and ctx.obs.merchant.isExchange) then
+    lines[#lines + 1] = "Visit Vaskarn to exchange."
+  end
+  if ctx.view.advisorOnly then lines[#lines + 1] = "Buying from this window was refused by the game." end
+  return table.concat(lines, "\n")
+end
+
 local function SummaryText(page, ctx, tierKey, chosen, room)
   local lines = {}
-  local function Warn(text) return U.WrapColor(U.Colors.CAUTION_ORANGE, text) end
+  local anyOpen = false
+  for _, r in ipairs(page.routes or {}) do if r.open then anyOpen = true end end
+  if not anyOpen then
+    lines[#lines + 1] = ClosedLine(page.routes)
+    return Finish(lines, ctx, chosen, true)
+  end
   if chosen and chosen.down then
     local q = chosen.quote
     lines[#lines + 1] = Warn(chosen.ok and T.DownWarning(ctx.season, chosen.product.from, chosen.product.to, q.spend, q.crests)
       or T.DownGeneric(ctx.season, chosen.product.from))
-  elseif (page.best or 0) == 0 and (chosen or page.downRoute) then
-    lines[#lines + 1] = Warn("Nothing can be made by trading up right now. " .. NothingReason(page, ctx, tierKey, chosen))
-    for _, line in ipairs(StillWorks(page, ctx, tierKey)) do lines[#lines + 1] = line end
-    local d = page.downRoute
-    if d then
-      lines[#lines + 1] = string.format("A trade down from %s could give up to %s, but it gives up a higher tier one for one: click it only if that's what you want.",
-        T.Tier(ctx.season, d.product.from), T.Crests(ctx.season, tierKey, d.max))
-    end
-    return table.concat(lines, "\n")
+    return Finish(lines, ctx, chosen)
   end
-  local anyOpen = false
-  for _, r in ipairs(page.routes or {}) do if r.open then anyOpen = true end end
-  if not anyOpen then
-    lines[#lines + 1] = "No trade into this tier is open to you yet. Click a locked one to see what it needs."
-  elseif not S.crests then
+  if (page.best or 0) == 0 then
+    NoneLines(page, ctx, tierKey, lines)
+    return Finish(lines, ctx, chosen)
+  end
+  if not S.crests then
     lines[#lines + 1] = string.format("Type how many you want, or press Max (up to %s now). The ways to get them light up once you do.",
       T.Crests(ctx.season, tierKey, page.best or 0))
   elseif not chosen then
@@ -581,18 +673,19 @@ local function SummaryText(page, ctx, tierKey, chosen, room)
       lines[#lines + 1] = step.kind == "open" and string.format("Step %d: %s", i, T.StepWords(ctx.season, step))
         or string.format("Step %d: %s  (%s)", i, T.StepWords(ctx.season, step), T.Packs(step.packs))
     end
-    if #lines < fit then
-      lines[#lines + 1] = Plan.OpenOnly(chosen.plan) and "Nothing is bought: one press opens each of your packs."
-        or "Each step: buy its packs, open them, then buy the next."
-    end
+    if #lines < fit then lines[#lines + 1] = PlanFlow(chosen.plan) end
   elseif chosen.ok then
-    lines[#lines + 1] = string.format(Seasons.CAPABILITIES.openAtVendor and "Then open %s with one press each."
-      or "Then close Vaskarn's window and open %s with one press each.", T.Packs(chosen.quote.packs))
+    lines[#lines + 1] = FlowWords(1, 0)
   end
-  local openOnly = chosen and chosen.ok and chosen.kind == "plan" and Plan.OpenOnly(chosen.plan)
-  if not openOnly and not (ctx.obs.merchant and ctx.obs.merchant.isExchange) then lines[#lines + 1] = "Visit Vaskarn to exchange." end
-  if ctx.view.advisorOnly then lines[#lines + 1] = "Buying from this window was refused by the game." end
-  return table.concat(lines, "\n")
+  return Finish(lines, ctx, chosen)
+end
+
+-- The tier's cap in a few words, for the subtitle
+local function CapWords(t)
+  if not t or t.room.kind == "unknown" or t.room.raw == nil then return "Cap unknown." end
+  if t.room.kind == "none" then return "No cap." end
+  if t.room.raw <= 0 then return T.MaxBadge() .. "." end
+  return string.format("Cap allows %s more.", T.Count(t.room.raw))
 end
 
 local function ReviewReady(ctx, chosen)
@@ -615,8 +708,7 @@ function page:Refresh(ctx)
   local t = ctx.obs.tiers[tierKey]
   self.Icon:SetTexture(t and t.currency.icon or 134400)
   self.Title:SetText("Get " .. T.Currency(ctx.season, tierKey))
-  self.Sub:SetText(string.format("You have %s.  Room: %s.", T.Count(t and t.currency.ok and t.currency.quantity or nil),
-    t and (t.room.kind == "none" and "no cap" or T.Count(t.room.raw)) or "?"))
+  self.Sub:SetText(string.format("You have %s.  %s", T.Count(t and t.currency.ok and t.currency.quantity or nil), CapWords(t)))
   local routes = Routes(ctx, tierKey)
   -- Nothing is chosen, highlighted or drawn until an amount is typed
   local waiting = S.crests == nil

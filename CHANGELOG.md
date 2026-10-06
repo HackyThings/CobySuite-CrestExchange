@@ -4,6 +4,34 @@ All notable changes to Coby's Crest Exchange are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.0.3] - 2026-10-06
+
+### Added
+
+- Until your first exchange, the first page shows the whole flow in one line: click a tier, say how many, check the cost on Review, then buy and open the packs.
+- Opening a single exchange's packs shows a progress bar ("Opened 1 of 2 packs").
+- A tier at its cap shows a green check and the word MAX in a column of its own, with "Held" under the count. MAX still says when the cap usually rises.
+
+### Changed
+
+- Each tier on the first page is now a cap meter: the row fills in the crest's color as you earn toward the cap that limits it ("Season earned: 45/300", "Week earned: 120/300" or "Held: 120/400"), and a fainter band shows crests waiting in unopened packs. Its tooltip lists every cap that applies and what frees it.
+- Cap messages tell a cap on what you hold (spend some to make room) from a weekly or season cap (wait for it to rise).
+- Receipts show what you received and spent per tier as tiles with each crest's icon, plus any packs left unopened, and say how to open those.
+- The "Trade up 30 for 10" lines between tiers are gone (the Get page prices every trade); a locked trade still says why in red.
+- "Use every lower tier" is now "Plan from lower tiers", and "Why are trades locked?" is now "Trade requirements": it lists every trade, open or locked, and explains which gear slots hold a locked one back.
+- Review explains what comes after Confirm: whether Vaskarn is needed again between steps, and how many packs open in all. A big plan shows fewer step cards at once so nothing runs under Confirm.
+- When nothing can be traded up, the Get page points to each route's reason and, when one is available, how to reach a trade down; Max is greyed out when it would give nothing.
+- When every route is closed, the Get page says why: locked, not seen at Vaskarn yet, or a pack this version can't buy.
+- A plan stopped early is titled "Plan ended" with its goal, not as if the goal was reached.
+- Paused at Vaskarn, the page says what Review remaining and Open purchased packs do. Discarding while a purchase is unconfirmed warns that the purchase may still arrive.
+- **Settings:** the Cancel button is now **Undo edits**, with the same job: it drops changes you have not applied.
+- Many smaller look and wording improvements across the windows.
+
+### Fixed
+
+- The unopened-packs note on the Get page counts the packs its Open packs button opens.
+- Several smaller bug fixes.
+
 ## [0.0.2] - 2026-10-01
 
 ### Added

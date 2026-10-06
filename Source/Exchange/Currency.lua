@@ -49,7 +49,6 @@ function Currency.Read(currencyID)
     canEarnPerWeek = info.canEarnPerWeek == true,
     maxWeekly = Num(info.maxWeeklyQuantity) or 0,
     earnedThisWeek = Num(info.quantityEarnedThisWeek),
-    discovered = info.discovered == true,
   }
 end
 
@@ -60,7 +59,9 @@ function Currency.Room(c)
   end
   local season, weekly
   if c.maxQuantity > 0 then
-    local used = c.useTotalEarned and c.totalEarned or c.quantity
+    -- An earned cap with no readable total stays unknown, never the balance
+    local used
+    if c.useTotalEarned then used = c.totalEarned else used = c.quantity end
     if used == nil then return { raw = nil, kind = "unknown" } end
     season = math.max(0, c.maxQuantity - used)
   end

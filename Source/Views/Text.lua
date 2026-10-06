@@ -16,6 +16,32 @@ local Seasons = CobysCrestExchange.Seasons
 
 local UNKNOWN = "?"
 
+-- MAX in one way everywhere (Task #284): the word in the overview's sage green,
+-- and, where MAX is a status a player scans for, the check before it. The check
+-- is inline atlas markup sized to the line (0 is the font's height, so lines
+-- keep their height), tinted with the markup's own 0-255 red, green and blue
+-- (atlas markup ignores color codes).
+local SAGE = U.Colors.SAGE_GREEN
+local SAGE_RGB = { math.floor(SAGE[1] * 255 + 0.5), math.floor(SAGE[2] * 255 + 0.5), math.floor(SAGE[3] * 255 + 0.5) }
+local CHECK_ATLAS = "checkmark-minimal"
+
+-- The word alone, for running sentences
+function Text.Max()
+  return U.WrapColor(SAGE, "MAX")
+end
+
+-- The check and the word, for a status line
+function Text.MaxBadge()
+  return string.format("|A:%s:0:0:0:0:%d:%d:%d|a %s", CHECK_ATLAS, SAGE_RGB[1], SAGE_RGB[2], SAGE_RGB[3], Text.Max())
+end
+
+-- Text in a color that survives colored words inside it: a nested "|r" ends the
+-- whole color, so it is turned back on after each one
+function Text.Tint(color, text)
+  local hex = "|cFF" .. U.ColorToHex(color)
+  return hex .. text:gsub("|r", "|r" .. hex) .. "|r"
+end
+
 function Text.Count(n)
   if n == nil then return UNKNOWN end
   if n == math.huge then return "no limit" end
@@ -29,6 +55,11 @@ end
 
 function Text.Packs(n)
   return Text.Count(n) .. " " .. Text.Plural(n, "pack", "packs")
+end
+
+-- A balance before and after ("200 to 140")
+function Text.Change(before, after)
+  return Text.Count(before) .. " to " .. Text.Count(after)
 end
 
 -- Tier colors follow the item quality colors of the tracks
@@ -56,9 +87,6 @@ end
 function Text.Currency(season, tierKey)
   return Text.Tier(season, tierKey, " " .. (season and season.label or "crests"))
 end
-
-local LIMIT_KIND = { season = "this season's cap", weekly = "this week's cap" }
-function Text.LimitKind(kind) return LIMIT_KIND[kind] or kind end
 
 local LIMITER = {
   unknown_room = "The game isn't reporting how much room is left for this tier.",
@@ -110,7 +138,7 @@ local PAUSE = {
   offer_ambiguous = "Vaskarn lists this pack more than once, so nothing was bought.",
   unknown_balance = "The game isn't reporting your crest balance.",
   unknown_room = "The game isn't reporting how much room is left for this tier.",
-  capped = "These crests are at their cap, so buying stopped before a pack could be wasted.",
+  capped = "These crests are at " .. Text.MaxBadge() .. ", or too close for another pack, so buying stopped before a pack could be wasted.",
   balance = "Not enough crests left for another pack.",
   bags = "Your bags are full.",
   stock = "The vendor is out of stock.",
@@ -240,22 +268,45 @@ function Text.TabStatus(view)
 end
 
 -- The cap a tier is under, in words with its numbers ("its season cap: 800 of
--- 800 earned"), and when it usually rises; nil without a cap
-local function CapWords(t)
+-- 800 earned"), and when it usually rises; nil without a cap. A reached cap
+-- reads as MAX, the word the overview shows (Task #282): "MAX: 800 of 800
+-- earned this season". badge puts the check before the word (a status line);
+-- without it the word is colored alone (a running sentence).
+local function CapWords(t, badge)
   local room, c = t.room, t.currency
+  local reached = room.raw ~= nil and room.raw <= 0
+  local max = (badge and Text.MaxBadge() or Text.Max()) .. ": "
   if room.kind == "weekly" then
-    return string.format("this week's cap: %s of %s earned this week", Text.Count(c.earnedThisWeek), Text.Count(c.maxWeekly)),
+    return string.format(reached and (max .. "%s of %s earned this week") or "this week's cap: %s of %s earned this week",
+        Text.Count(c.earnedThisWeek), Text.Count(c.maxWeekly)),
       "It starts again with the weekly reset."
   end
   if room.kind == "season" then
     if c.useTotalEarned then
-      return string.format("its season cap: %s of %s earned", Text.Count(c.totalEarned), Text.Count(c.maxQuantity)),
+      return string.format(reached and (max .. "%s of %s earned this season") or "its season cap: %s of %s earned",
+          Text.Count(c.totalEarned), Text.Count(c.maxQuantity)),
         "Season caps usually go up with each weekly reset."
     end
-    return string.format("its cap: %s of %s held", Text.Count(c.quantity), Text.Count(c.maxQuantity)),
+    return string.format(reached and (max .. "%s of %s held") or "its cap: %s of %s held",
+        Text.Count(c.quantity), Text.Count(c.maxQuantity)),
       "Spending some makes room again."
   end
 end
+
+-- What gives a full cap room again, by its kind: a cap on what you hold
+-- frees up when you spend, a weekly cap starts again at the reset, and an
+-- earned season cap only rises
+local function HeldCap(t)
+  return t.room.kind == "season" and not t.currency.useTotalEarned
+end
+
+-- "...wait until <this>", by the cap's kind
+local function WaitFor(t)
+  if HeldCap(t) then return "you spend some" end
+  if t.room.kind == "weekly" then return "the weekly reset" end
+  return "the cap rises"
+end
+Text.WaitFor = WaitFor
 
 -- Two kinds of room: raw room is what the cap still allows (it decides
 -- whether a held pack can open); buying room is raw room less the crests
@@ -265,6 +316,43 @@ local function Rooms(t)
   if raw == nil or raw == math.huge then return raw, raw end
   return raw, math.max(0, raw - (t.packedCrests or 0))
 end
+
+-- The cap that binds now as a meter for the overview's tiles (Task #247):
+-- { frac, packed (the unopened crests' share, clipped to what's left), full,
+-- used, limit, label ("Season earned", "Week earned", "Held") }, or nil
+-- with no cap or unreadable numbers
+function Text.CapMeter(t)
+  if not (t and t.room and t.currency) then return nil end
+  local room, c = t.room, t.currency
+  local used, limit, label
+  if room.kind == "weekly" then
+    used, limit, label = c.earnedThisWeek, c.maxWeekly, "Week earned"
+  elseif room.kind == "season" then
+    limit = c.maxQuantity
+    if c.useTotalEarned then used, label = c.totalEarned, "Season earned" else used, label = c.quantity, "Held" end
+  else
+    return nil
+  end
+  if type(used) ~= "number" or type(limit) ~= "number" or limit <= 0 or room.raw == nil then return nil end
+  local frac = math.max(0, math.min(1, used / limit))
+  local packed = math.max(0, math.min(1 - frac, (t.packedCrests or 0) / limit))
+  return { frac = frac, packed = packed, full = room.raw <= 0, used = used, limit = limit, label = label }
+end
+
+-- The meter's line under the tier's name, the same shape capped or not (Task
+-- #269): "Season earned: 45/300", "Week earned: 120/300", "Held: 120/400". The
+-- cap being reached shows as the status column's check and MAX, not in this line
+function Text.MeterLine(m)
+  return m.label .. ": " .. Text.Count(m.used) .. "/" .. Text.Count(m.limit)
+end
+
+-- The word beside a capped tile's check, so a full row reads at a glance (Task
+-- #268, a still sage-green status since Task #269)
+Text.MAX_BADGE = "MAX"
+
+-- The caption under a tile's count: the balance you hold, set apart from the
+-- season's earned figures in the line beside it
+Text.HELD_CAPTION = "Held"
 
 -- Whether a held pack of `yield` crests can open now (raw room)
 function Text.CanOpen(t, yield)
@@ -281,7 +369,8 @@ function Text.Openable(t, yield)
   return math.min(packs, math.floor(t.room.raw / (yield or 1))), packs
 end
 
--- "both of your 2 unopened Champion packs" / "1 of your 2 ..." in words
+-- "your 2 unopened Champion packs can all open" / "1 of your 2 unopened Champion
+-- packs can open now and the rest wait"
 local function OpenableWords(season, tierKey, t, yield)
   local fit, packs = Text.Openable(t, yield)
   local name = Text.Tier(season, tierKey)
@@ -290,7 +379,6 @@ local function OpenableWords(season, tierKey, t, yield)
   end
   return string.format("%s of your %s unopened %s packs can open now and the rest wait", Text.Count(fit), Text.Count(packs), name)
 end
-Text.OpenableWords = OpenableWords
 
 -- Whether no more can be bought into a tier now: buying room, after the
 -- crests already waiting in unopened packs, is less than a pack
@@ -314,15 +402,20 @@ function Text.CapSentence(season, tierKey, t, yield)
   local raw, free = Rooms(t)
   local packed = t.packedCrests or 0
   if raw <= 0 then
+    if HeldCap(t) then return string.format("%s is at %s. Spending some makes room for more.", name, words) end
+    if t.room.kind == "weekly" then
+      return string.format("%s is at %s. More can be received after the weekly reset.", name, words)
+    end
     return string.format("%s is at %s. No more can be received until it rises. %s", name, words, rises)
   end
   if packed > 0 and free < (yield or 1) then
     if raw >= (yield or 1) then
-      return string.format("%s has room for %s more under %s, and your unopened %s packs already hold %s of it: %s, but nothing more can be bought until the cap rises.",
-        name, Text.Count(raw), words, name, Text.Count(packed), OpenableWords(season, tierKey, t, yield))
+      return string.format("%s has room for %s more under %s, and your unopened %s packs already hold %s of it: %s, but nothing more can be bought until %s.",
+        name, Text.Count(raw), words, name, Text.Count(packed), OpenableWords(season, tierKey, t, yield), WaitFor(t))
     end
-    return string.format("%s has room for only %s more under %s, less than one pack (%s): your unopened %s packs wait until the cap rises. %s",
-      name, Text.Count(raw), words, Text.Count(yield), name, rises)
+    return string.format("%s has room for only %s more under %s, less than one pack (%s): your unopened %s packs wait until %s.%s",
+      name, Text.Count(raw), words, Text.Count(yield), name, WaitFor(t),
+      (HeldCap(t) or t.room.kind == "weekly") and "" or (" " .. rises))
   end
   if yield and free < yield then
     return string.format("%s has room for only %s more under %s, and a pack holds %s. %s", name, Text.Count(free), words,
@@ -335,7 +428,7 @@ end
 function Text.CapShort(season, tierKey, t, yield)
   local name = Text.Tier(season, tierKey)
   if not (t and t.room) or t.room.raw == nil then return string.format("The game isn't reporting %s's cap", name) end
-  local words = CapWords(t)
+  local words = CapWords(t, true)
   if not words then return string.format("%s has no cap", name) end
   local raw, free = Rooms(t)
   local packed = t.packedCrests or 0
@@ -365,7 +458,7 @@ end
 
 -- Why a plan can't make more: the reason and the tier it happened in
 local PLAN_LIMITER = {
-  balance = "not enough crests in the tiers you allowed",
+  balance = "not enough spendable crests in the lower tiers",
   room = "no room for more %s crests right now",
   unknown_room = "the game isn't reporting %s's cap",
   unavailable = "Vaskarn isn't offering the trade into %s",
@@ -428,10 +521,11 @@ function Text.CappedLine(season, tierKey, yield, room)
     Text.Tier(season, tierKey), Text.Count(yield), Text.Count(room), verified and "won't open" or "may not open")
 end
 
--- A trade down in words: what you give up, for what, one for one, for good
-function Text.DownWarning(season, from, to, spend, receive)
-  return string.format("Trading down: you give up %s, a higher tier, for %s, one for one. It can't be refunded.",
-    Text.Crests(season, from, spend), Text.Crests(season, to, receive))
+-- A trade down in words: what you give up, for what, one for one, for good.
+-- noRefund leaves out the refund sentence (Review says it in its banner)
+function Text.DownWarning(season, from, to, spend, receive, noRefund)
+  return string.format("Trading down: spend %s to receive %s, a lower tier.%s",
+    Text.Crests(season, from, spend), Text.Crests(season, to, receive), noRefund and "" or " It can't be refunded.")
 end
 
 -- The same before an amount is set

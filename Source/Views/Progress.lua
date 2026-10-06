@@ -31,12 +31,16 @@ local E = CobysCrestExchange.Events
 
 local function Command(cmd, arg) CobysCrestExchange.EventBus:Fire(E.SessionCommand, cmd, arg) end
 
+local DISCARD_BODY = "The rest of this exchange won't be bought. Packs in your bags and crests you already have stay yours."
+-- An unconfirmed purchase may still land: discarding can't call it back
+local DISCARD_UNCONFIRMED = "The last purchase may still arrive; discarding can't cancel it."
+
 local discardPopup = UI.CreateDialogPopup({
   name = "CobysCrestExchangeDiscardPopup",
   icon = CobysCrestExchange.ICON,
   title = "Discard this order?",
   danger = true,
-  body = "The rest of this exchange won't be bought. Packs in your bags and crests you already have stay yours.",
+  body = DISCARD_BODY,
   confirmText = "Discard", cancelText = "Keep",
   width = 360, height = 150, hidden = true,
   onConfirm = function() Command("discard") end,
@@ -69,7 +73,8 @@ local function Build(host)
   page.StepBar:SetHeight(16)
   page.StepBar.bg = page.StepBar:CreateTexture(nil, "BACKGROUND")
   page.StepBar.bg:SetAllPoints()
-  page.StepBar.bg:SetColorTexture(0, 0, 0, 0.5)
+  -- A lighter track than the window, so an empty bar still reads as a bar
+  page.StepBar.bg:SetColorTexture(1, 1, 1, 0.12)
   page.StepBar.Text = page.StepBar:CreateFontString(nil, "OVERLAY", U.Fonts.DATA)
   page.StepBar.Text:SetPoint("CENTER")
   local font, size = page.StepBar.Text:GetFont()
@@ -97,6 +102,16 @@ local function Build(host)
   page.Message:SetPoint("TOPLEFT", 6, -120)
   page.Message:SetPoint("TOPRIGHT", -6, -120)
   page.Message:SetJustifyH("LEFT")
+  -- Under the figures, never centred in the room left above the buttons
+  page.Message:SetJustifyV("TOP")
+  -- A receipt's figures: one stat tile per tier that changed, and the
+  -- unopened packs (the shared tiles, built at load)
+  page.tileList = {}
+  page.Tiles = UI.CreateStatTiles(host, { tiles = function() return page.tileList end, maxTiles = 6,
+    columns = 2, minTileWidth = 150, height = 46 })
+  page.Tiles:SetPoint("TOPLEFT", host, "TOPLEFT", 0, -30)
+  page.Tiles:SetPoint("TOPRIGHT", host, "TOPRIGHT", 0, -30)
+  page.Tiles:Hide()
 
   page.Stop = Button(host, "Stop after this purchase", 190, { "BOTTOMLEFT", host, "BOTTOMLEFT", 0, 44 },
     function() Command("stop") end)
@@ -123,7 +138,13 @@ local function Build(host)
   page.ReviewRemaining = Button(host, "Review remaining", 150, { "BOTTOMRIGHT", host, "BOTTOMRIGHT", 0, 44 },
     function() Command("review_remaining") end)
   page.Discard = Button(host, "Discard order", 120, { "BOTTOMLEFT", host, "BOTTOMLEFT", 0, 4 },
-    function() discardPopup:Show() end)
+    function()
+      -- Read at the click: only a purchase still unconfirmed gets the warning
+      local view = CobysCrestExchange.Session.View()
+      local unconfirmed = view.state == "UNCERTAIN" and view.uncertainKind ~= "open"
+      discardPopup:SetBody(unconfirmed and (DISCARD_BODY .. " " .. DISCARD_UNCONFIRMED) or DISCARD_BODY)
+      discardPopup:Show()
+    end)
   page.CheckAgain = Button(host, "Check again", 120, { "BOTTOMRIGHT", host, "BOTTOMRIGHT", 0, 44 },
     function() Command("check_again") end)
   page.CopyDetails = Button(host, "Copy details", 120, { "BOTTOMRIGHT", host, "BOTTOMRIGHT", 0, 4 },
@@ -153,6 +174,8 @@ end
 
 local function SetRows(page, rows)
   page.lastRows = rows
+  -- The plain layout's figures take only the rows they show
+  if not page.planned then page.Figures:SetHeight(18 * math.max(1, #rows)) end
   for i, row in ipairs(page.Rows) do
     local data = rows[i]
     row:SetShown(data ~= nil)
@@ -187,16 +210,37 @@ local function Buying(page, ctx, view)
   page.Stop:SetEnabled(not view.stopRequested)
 end
 
+-- A single exchange's opening as a bar under the title, the figures below it
+-- (verified opens only)
+local function OpenBar(page, opened, total)
+  local bar = page.StepBar
+  bar:ClearAllPoints()
+  bar:SetPoint("TOPLEFT", page.frame, "TOPLEFT", 2, -30)
+  bar:SetPoint("TOPRIGHT", page.frame, "TOPRIGHT", -2, -30)
+  bar:SetValue(total > 0 and math.min(1, opened / total) or 0)
+  bar.Text:SetText(string.format("Opened %s of %s", T.Count(opened), T.Packs(total)))
+  bar:Show()
+  page.Figures:ClearAllPoints()
+  page.Figures:SetPoint("TOPLEFT", bar, "BOTTOMLEFT", -2, -6)
+  page.Figures:SetPoint("TOPRIGHT", bar, "BOTTOMRIGHT", 2, -6)
+end
+
 local function Opening(page, ctx, view)
   local o, l, s = view.order, view.ledger, ctx.season
   local product = Seasons.ProductByKey(s, o.key)
   local total = o.kind == "open_existing" and l.openQuota or l.purchased
   page.Title:SetText(string.format("Open your %s crest packs", T.Tier(s, product.to)))
-  SetRows(page, {
-    { "Opened", string.format("%s of %s", T.Count(l.opened), T.Count(total)) },
+  local rows = {
     { "Received", T.Crests(s, product.to, l.received) },
     { "Balance", T.Count(view.summary and view.summary.balanceNow) },
-  })
+  }
+  if page.planned then
+    -- A plan's own bar counts its steps; the opens go in the folded line
+    table.insert(rows, 1, { "Opened", string.format("%s of %s", T.Count(l.opened), T.Count(total)) })
+  else
+    OpenBar(page, l.opened or 0, total or 0)
+  end
+  SetRows(page, rows)
   local msg
   if view.state == "WAITING_FOR_LOOT" then
     msg = "Collect the contents in the loot window; the next pack is ready after."
@@ -243,6 +287,11 @@ local function Paused(page, ctx, view)
   local canReview = sum.notBoughtPacks > 0 and ctx.obs.merchant and ctx.obs.merchant.isExchange
   if sum.notBoughtPacks > 0 and not canReview then
     lines[#lines + 1] = "Talk to Vaskarn again to review and buy the rest."
+  elseif canReview then
+    lines[#lines + 1] = "Review remaining to buy the rest."
+  end
+  if (view.openQuota or 0) > 0 then
+    lines[#lines + 1] = "Open purchased packs to collect the crests already bought."
   end
   page.Message:SetText(table.concat(lines, "\n"))
   Only(page, (view.openQuota or 0) > 0 and page.OpenPurchased or nil, canReview and page.ReviewRemaining or nil, page.Discard)
@@ -267,23 +316,45 @@ local function Uncertain(page, ctx, view)
   Only(page, page.CheckAgain, page.CopyDetails, page.Discard)
 end
 
--- A plan's receipt: each tier's net change over all its steps (the target
--- first), so crests made on the way and spent again cancel out
-local function PlanReceiptRows(s, r)
-  local t = r.plan.totals or { spent = {}, received = {} }
-  local target = r.plan.target
-  local function Net(key) return (t.received[key] or 0) - (t.spent[key] or 0) end
-  local gained, spent = {}, {}
-  if Net(target) > 0 then gained[1] = T.Crests(s, target, Net(target)) end
-  for _, tier in ipairs(s.tiers) do
-    local n = Net(tier.key)
-    if n < 0 then spent[#spent + 1] = T.Crests(s, tier.key, -n)
-    elseif n > 0 and tier.key ~= target then gained[#gained + 1] = T.Crests(s, tier.key, n) end
+-- One receipt tile: a tier's crests received or spent, in its color
+local function TierTile(ctx, key, n, received)
+  local t = ctx.obs.tiers[key]
+  local r, g, b = U.HexToRGB(T.TierColor(ctx.season, key))
+  return { key = key .. (received and "+" or "-"), icon = t and t.currency.icon or 134400, value = T.Count(n),
+    label = T.TierLabel(ctx.season, key) .. (received and " received" or " spent"), labelColor = { r, g, b },
+    color = received and n > 0 and U.Colors.SUCCESS_GREEN or nil }
+end
+
+-- A receipt's tiles: what each tier received, then spent, then any packs
+-- left unopened. A plan counts each tier's net change over all its steps
+-- (the target first), so crests made on the way and spent again cancel out
+local function ReceiptTiles(ctx, r)
+  local s, list = ctx.season, {}
+  if r.plan then
+    local t = r.plan.totals or { spent = {}, received = {} }
+    local target = r.plan.target
+    local function Net(key) return (t.received[key] or 0) - (t.spent[key] or 0) end
+    list[1] = TierTile(ctx, target, math.max(0, Net(target)), true)
+    for _, tier in ipairs(s.tiers) do
+      local n = Net(tier.key)
+      if n > 0 and tier.key ~= target then list[#list + 1] = TierTile(ctx, tier.key, n, true) end
+    end
+    for _, tier in ipairs(s.tiers) do
+      local n = Net(tier.key)
+      if n < 0 then list[#list + 1] = TierTile(ctx, tier.key, -n, false) end
+    end
+  elseif r.order then
+    local product = Seasons.ProductByKey(s, r.order.key)
+    list[1] = TierTile(ctx, product.to, r.ledger.received or 0, true)
+    -- Opening packs you had spends nothing
+    if r.order.kind ~= "open_existing" then list[2] = TierTile(ctx, product.from, r.ledger.spent or 0, false) end
   end
-  local rows = { { "Received", #gained > 0 and table.concat(gained, ", ") or T.Count(0) } }
-  if #spent > 0 then rows[#rows + 1] = { "Spent", table.concat(spent, ", ") } end
-  rows[#rows + 1] = { "Packs left unopened", T.Count(r.unopened or 0) }
-  return rows
+  if (r.unopened or 0) > 0 then
+    list[#list + 1] = { key = "unopened", icon = CobysCrestExchange.ICON, value = T.Count(r.unopened),
+      label = T.Plural(r.unopened, "Pack left unopened", "Packs left unopened") }
+  end
+  while #list > 6 do table.remove(list) end
+  return list
 end
 
 local function Done(page, ctx, view)
@@ -293,31 +364,33 @@ local function Done(page, ctx, view)
   local opening = r and not r.plan and r.order and r.order.kind == "open_existing"
   local title
   if r and r.plan then
-    title = string.format("%s: %s more %s", left and "Plan ended" or "Plan complete", T.Count(r.plan.crests), T.Tier(s, r.plan.target))
+    -- An ended plan names its goal as a goal, not as what it made
+    title = left and string.format("Plan ended (goal: %s more %s)", T.Count(r.plan.crests), T.Tier(s, r.plan.target))
+      or string.format("Plan complete: %s more %s", T.Count(r.plan.crests), T.Tier(s, r.plan.target))
   elseif opening then
     title = left and "Opening ended" or "Packs opened"
   else
     title = left and "Exchange ended" or "Exchange complete"
   end
   page.Title:SetText(title)
-  if r and r.plan then
-    SetRows(page, PlanReceiptRows(s, r))
-  elseif r and r.order then
-    local product = Seasons.ProductByKey(s, r.order.key)
-    local rows = {}
-    -- Opening packs you had spends nothing
-    if not opening then rows[1] = { "Spent", T.Crests(s, product.from, r.ledger.spent) } end
-    rows[#rows + 1] = { "Received", T.Crests(s, product.to, r.ledger.received) }
-    rows[#rows + 1] = { "Packs left unopened", T.Count(r.unopened or 0) }
-    SetRows(page, rows)
-  else
-    SetRows(page, {})
-  end
-  local message = ""
+  SetRows(page, {})
+  page.tileList = r and ReceiptTiles(ctx, r) or {}
+  page.Tiles:Show()
+  page.Tiles:Refresh()
+  page.Figures:Hide()
+  page.Message:ClearAllPoints()
+  page.Message:SetPoint("TOPLEFT", page.Tiles, "BOTTOMLEFT", 6, -10)
+  page.Message:SetPoint("TOPRIGHT", page.Tiles, "BOTTOMRIGHT", -6, -10)
+  local message
   if left then
-    message = r.plan and "This plan ended here; its remaining steps weren't bought. Unopened packs stay in your bags."
-      or opening and "Opening ended here. Unopened packs stay in your bags."
-      or "This exchange ended here; nothing more was bought. Unopened packs stay in your bags."
+    message = r.plan and "This plan ended here; its remaining steps weren't bought."
+      or opening and "Opening ended here."
+      or "This exchange ended here; nothing more was bought."
+  else
+    message = (r and (r.unopened or 0) > 0) and "This exchange is done." or "All packs opened. What you received is shown above."
+  end
+  if r and (r.unopened or 0) > 0 then
+    message = message .. " Unopened packs stay in your bags: choose another exchange, then Open packs on the first page."
   end
   page.Message:SetText(message)
   Only(page, page.Another, page.Close)
@@ -342,7 +415,6 @@ local function PlanModel(ctx, view)
       local node = model.nodes[s.to]
       if node then node.sub = string.format("Step %d: %s%s", i, T.StepWords(season, s), state == "done" and " (done)" or "") end
     else
-    if i == plan.index and view.state == "COMPLETE" then state = "done" end
     model.links[s.to] = { state = state, label = string.format("Step %d: %s, %s to %s", i, T.Packs(s.packs),
       T.Crests(season, s.from, s.spend or s.packs * s.cost), T.Crests(season, s.to, s.packs * s.yield)) }
     end
@@ -356,7 +428,7 @@ local function Next(page, ctx, view)
   page.Title:SetText(string.format("Plan: step %d of %d is ready", plan.index, #plan.steps))
   SetRows(page, {
     { "Next step", T.StepWords(ctx.season, step) },
-    { "Packs", T.Packs(step.packs) },
+    { "Packs", T.Count(step.packs) },
   })
   local atVendor = ctx.obs.merchant and ctx.obs.merchant.isExchange
   local msg
@@ -376,7 +448,7 @@ local function Next(page, ctx, view)
     elseif IK and IK.KeyState() ~= "none" then
       msg = T.StepBlocked("merchant_closed") .. " Then use the button below."   -- the key setting is off
     else
-      msg = T.StepBlocked("merchant_closed") .. " With a key bound to Interact with target, one key does every step."
+      msg = T.StepBlocked("merchant_closed") .. " With a key bound to Interact with Target, one key does every step."
     end
   elseif view.reason and view.reason ~= "restored" and view.reason ~= "merchant_closed" and view.reason ~= "combat" then
     msg = T.StepBlocked(view.reason)
@@ -417,7 +489,7 @@ end
 local function LayoutForPlan(page, ctx, view)
   -- An uncertain purchase keeps the plain layout even in a plan: its rows and
   -- explanation need the room the ladder would take (review, 2026-09-30)
-  local planned = view.plan ~= nil and ctx.season ~= nil and view.state ~= "UNCERTAIN"
+  local planned = view.plan ~= nil and ctx.season ~= nil and view.state ~= "UNCERTAIN" and view.state ~= "COMPLETE"
   page.planned = planned
   page.ladder.frame:SetShown(planned)
   page.StepBar:SetShown(planned)
@@ -457,6 +529,8 @@ function page:Refresh(ctx)
     SetRows(self, {})
     Only(self, self.Close)
     self.Open:Hide()
+    self.Tiles:Hide()
+    self.StepBar:Hide()
     return
   end
   LayoutForPlan(self, ctx, view)
@@ -466,7 +540,9 @@ function page:Refresh(ctx)
     for _, row in ipairs(self.lastRows) do parts[#parts + 1] = row[1] .. ": " .. tostring(row[2]) end
     self.Message:SetText(table.concat(parts, "   ") .. "\n" .. (self.Message:GetText() or ""))
   end
-  local opening = mode == "opening" or mode == "next" or (mode == "done" and not view.plan)
+  if mode ~= "done" then self.Tiles:Hide() end
+  -- Receipts have no button: there is nothing left to press (Task #236)
+  local opening = mode == "opening" or mode == "next"
   self.Open:SetShown(opening)
   -- The text never runs under the button: it ends above the hint line, which
   -- only opening shows

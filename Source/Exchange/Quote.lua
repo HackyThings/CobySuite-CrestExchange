@@ -133,12 +133,12 @@ function Quote.Build(obs, sel, opts)
     status = status, rounding = rounding, key = sel.productKey, product = product, offer = offer,
     direction = product.kind, sourceTier = product.from, destTier = product.to, itemID = offer.itemID,
     yield = yield, cost = cost, packs = packs, crests = packs * yield, spend = packs * cost,
-    maxPacks = maxPacks, maxCrests = maxPacks * yield, limiter = limiter, limits = limits,
-    reserve = opts.reserve or 0, planning = planning, obsVersion = obs.version,
+    maxPacks = maxPacks, maxCrests = maxPacks * yield, limiter = limiter,
+    reserve = opts.reserve or 0, planning = planning,
     sourceBefore = src.currency.ok and src.currency.quantity or nil,
     destBefore = dst.currency.ok and dst.currency.quantity or nil,
-    roomRaw = dst.room.raw, roomKind = dst.room.kind, uncommitted = uncommitted,
-    refundable = offer.refundable == true, signature = offer.signature,
+    roomKind = dst.room.kind, uncommitted = uncommitted,
+    signature = offer.signature,
   }
   q.sourceAfter = q.sourceBefore and (q.sourceBefore - q.spend) or nil
   q.destAfterOpen = q.destBefore and (q.destBefore + q.crests) or nil

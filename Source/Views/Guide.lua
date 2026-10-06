@@ -24,9 +24,10 @@ Guide.SECTIONS = {
     summary = "Pick the tier you want, then how many.",
     body = { T.Bullets({
         "Talk to Vaskarn in Silvermoon and this window opens beside his list.",
-        "The ladder shows your five tiers, Myth on top, with balance, room under the cap and crests in unopened packs.",
+        "The ladder shows your five tiers, Myth on top. The big number is what you hold.",
+        "Each row fills as you earn toward the cap that limits it, with a fainter band for crests in unopened packs. Reaching the cap shows a green check and " .. Views.Text.Max() .. "; unopened packs can fill the row without reaching it.",
         "Click the tier you want more of, then type how many. Every route is priced for that amount.",
-        "Routes: trade up from the tier below, use every lower tier as a plan, or trade down from the tier above.",
+        "Routes: trade up from the tier below, a plan from the lower tiers, or trade down from the tier above.",
         "A route that works is picked and highlighted, plan first, then trade up. Click another to use it instead.",
         "Trading down is never picked for you, and Review warns you before it gives up a higher tier.",
         "Review lists what you spend and receive. Confirm starts the exchange. Exchanges can't be refunded.",
@@ -53,7 +54,7 @@ Guide.SECTIONS = {
   { key = "plans", title = "Several tiers at once", atlas = "common-icon-rotateleft",
     summary = "Want Myth, have Hero and Champion? One plan does it.",
     body = { T.Bullets({
-        "Pick a tier, type how many, then choose Use every lower tier. It's picked for you unless you chose another working route.",
+        "Pick a tier, type how many, then choose Plan from lower tiers. It's picked for you unless you chose another working route.",
         "Adjust shows the whole plan on the ladder: which trades run, in what order, and every balance before and after.",
         "Each lower tier has a Spend box. Unchecked, crests made there on the way are used, but that tier's balance and unopened packs stay untouched.",
         "Crest packs already in your bags count: the plan opens them as a step and buys only what's still needed.",
@@ -66,7 +67,7 @@ Guide.SECTIONS = {
         "Crest tiers can have a weekly or season cap. Room is how many more you can receive.",
         "Packs you already have count against the room. A pack is only bought when all its crests fit.",
         "Open packs soon: crests you earn elsewhere use the same room, and a pack that no longer fits waits in your bags.",
-        "When a tier is full, the window names the cap, with numbers, and what still works.",
+        "A tier with no room left reads " .. Views.Text.Max() .. ": the window names the cap, with numbers, and what still works.",
         "Weekly allowances return at the weekly reset. Season caps usually go up with each weekly reset.",
     }) } },
   { key = "locked", title = "Locked trades", atlas = "common-icon-redx",
@@ -75,7 +76,7 @@ Guide.SECTIONS = {
         "Trading up needs the achievement of the tier you spend, earned on this character. Hero into Myth needs Hero of the Mist.",
         "The achievement counts the highest item level each gear slot has reached, so one low slot holds it back.",
         "Trading down needs Vaskarn's quest Upgrade Practicum.",
-        "Why are trades locked? on the first page lists every trade and what it needs.",
+        "Trade requirements, on the first page, lists every trade and what it needs.",
     }) } },
   { key = "stopping", title = "Stopping and coming back", atlas = "common-icon-undo",
     summary = "Nothing is bought twice.",
@@ -105,14 +106,13 @@ Guide.SECTIONS = {
 
 local window = CobySuite_CobysCrestExchange.UI.CreateGuideWindow({
   name = "CobysCrestExchangeGuideWindow",
-  title = "Coby's Crest Exchange Guide",
+  title = CobySuite_CobysCrestExchange.Utilities.WrapColor(CobysCrestExchange.BRAND_COLOR, "Coby's Crest Exchange") .. " Guide",
   icon = CobysCrestExchange.ICON,
   intro = "New here? Start with the first section. Click any heading to open or close it.",
   footer = "Open this guide any time with " .. Key("/ce guide"),
   sections = Guide.SECTIONS,
   persist = { svTable = function() return COBYS_CREST_EXCHANGE_WINDOW_STATE end, key = "guideWindow" },
 })
-Guide.window = window
 
 function Guide.Toggle() window:Toggle() end
 

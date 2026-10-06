@@ -118,7 +118,7 @@ local function RefreshNow()
   frame.SeasonText:SetText(ctx.season and ctx.season.label or "Unknown season")
   local atVendor = ctx.obs.merchant and ctx.obs.merchant.isExchange
   frame.PlaceText:SetText(atVendor and U.WrapColor(U.Colors.SUCCESS_GREEN, "At Vaskarn")
-    or U.WrapColor(U.Colors.LABEL_GRAY, "Planning"))
+    or U.WrapColor(U.Colors.LABEL_GRAY, "Not at Vaskarn"))
   local name = PickPage(ctx)
   for pageName, page in pairs(pages) do
     if pageName ~= name then page.frame:Hide() end
@@ -135,8 +135,8 @@ function Window.Refresh() coalesced:Call() end
 function Window.RefreshNow() coalesced:Cancel(); RefreshNow() end
 
 -- Navigate within the idle pages (overview, source, plan, requirements,
--- before; amount when resuming).
--- fields are set; clear lists fields to remove (a nil in fields can't do that)
+-- before; amount when resuming). `fields` are set; `clear` lists fields to
+-- remove (a nil in `fields` can't do that)
 function Window.Go(page, fields, clear)
   nav.page = page
   if fields then for k, v in pairs(fields) do nav[k] = v end end
@@ -270,7 +270,7 @@ frame.HelpButton = UI.CreateHelpButton(frame, {
 })
 frame.SettingsButton = UI.CreateSettingsGearButton(frame, {
   point = { "RIGHT", frame.HelpButton, "LEFT", -2, 0 },
-  height = 20,
+  height = frame.CloseButton and frame.CloseButton:GetHeight() or 24,   -- the close X's size, like its neighbour "?"
   tooltip = "Coby's Crest Exchange settings",
   onClick = function() CobysCrestExchange.Config.ToggleSettings() end,
 })

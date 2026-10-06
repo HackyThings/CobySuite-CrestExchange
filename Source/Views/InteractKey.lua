@@ -11,10 +11,10 @@
 --     own frame makes the Interact key click it (SetOverrideBindingClick);
 --   * when the plan waits for Vaskarn, the override is cleared, so the same
 --     key talks to him again as it always does;
---   * while the plan waits for Vaskarn, the game's "Enable Interact Key"
---     setting (CVar softTargetInteract, Any) is switched on if it was off, so
---     the key reaches the NPC you stand near without changing your target;
---     your own value is saved (COBYS_CREST_EXCHANGE_WINDOW_STATE.softInteractPrev,
+--   * while the plan waits for Vaskarn and the one button is showing, the
+--     game's "Enable Interact Key" setting (CVar softTargetInteract, Any) is
+--     switched on if it was off, so the key reaches the NPC you stand near
+--     without changing your target; your own value is saved (COBYS_CREST_EXCHANGE_WINDOW_STATE.softInteractPrev,
 --     so a reload or a crash still restores it) and put back as soon as the
 --     plan stops waiting, and at logout; a change you make during the wait
 --     stands and is never overwritten.

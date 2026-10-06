@@ -25,7 +25,7 @@ local E = CobysCrestExchange.Events
 local PlanView = {}
 Views.Plan = PlanView
 
--- What the player chose on this page (kept while the page is open)
+-- What the player chose for the plan (the Get page keeps it in step)
 local S = { target = nil, crests = nil, spend = {} }
 PlanView.state = S
 
@@ -116,7 +116,7 @@ local function Model(ctx, plan)
     local after = plan.after and plan.after[tier.key]
     local node = { icon = t and t.currency.icon, value = T.Count(before), dim = i > targetIndex }
     if plan.status == "ok" and after and before and after ~= before then
-      node.value = T.Count(before) .. " > " .. T.Count(after)
+      node.value = T.Change(before, after)
       node.valueColor = after > before and { 0.3, 1, 0.3 } or { 1, 0.55, 0.3 }
     end
     if i < targetIndex then
@@ -145,10 +145,15 @@ end
 local function SummaryText(ctx, plan)
   local lines = {}
   if plan.status == "ok" then
-    local steps, presses = #plan.steps, 0
-    for _, s in ipairs(plan.steps) do presses = presses + s.packs end
+    local steps, presses, buys = #plan.steps, 0, 0
+    for _, s in ipairs(plan.steps) do
+      presses = presses + s.packs
+      if s.kind ~= "open" then buys = buys + 1 end
+    end
     lines[#lines + 1] = string.format("%s in %d %s. You'll press Open once per pack (%d in all); the panel shows each next press.",
       T.Crests(ctx.season, S.target, S.crests), steps, T.Plural(steps, "step", "steps"), presses)
+    -- Each purchase after the first needs Vaskarn's window again (Task #236)
+    if buys > 1 then lines[#lines + 1] = "Talk to Vaskarn again before each purchase after the first." end
     local over = {}
     for key, after in pairs(plan.after or {}) do
       local before = plan.before[key]
@@ -181,7 +186,7 @@ function page:Refresh(ctx)
   local r = self.Round
   r:SetShown(plan.status == "rounding")
   if plan.status == "rounding" then
-    r.Text:SetText(string.format("Packs hold %s. Choose", T.Count(plan.yield)))
+    r.Text:SetText(string.format("%s per pack. Choose:", T.Count(plan.yield)))
     r.Down:SetShown(plan.rounding.down ~= nil); r.Down:SetText(T.Count(plan.rounding.down or 0))
     r.Up:SetShown(plan.rounding.up ~= nil); r.Up:SetText(T.Count(plan.rounding.up or 0))
   end

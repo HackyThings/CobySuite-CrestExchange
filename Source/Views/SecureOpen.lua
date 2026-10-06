@@ -103,8 +103,8 @@ end
 
 local BUY_GUARD = 0.5   -- Buy step ignores presses this long after it appears
 
--- The label with the key that presses it ("Open next pack  (F)"), when the
--- Interact key is doing it
+-- The label with the Interact key's name: the key that presses the button
+-- ("Open next pack  (F)") or the one that talks to Vaskarn
 local function KeyLabel(text, mode)
   local key = Views.InteractKey
   if not key then return text end
@@ -154,15 +154,6 @@ local function Paint(view)
     Note(shown, action.enabled and not guarded, action.reason or (guarded and "just appeared" or nil))
     return
   end
-  if state == "COMPLETE" or (order and (view.openQuota or 0) <= 0) then
-    -- An exchange ended early says so rather than claiming every pack opened
-    local r = state == "COMPLETE" and view.receipt
-    local unopened = r and r.outcome == "left" and r.unopened or 0
-    button:SetText(unopened > 0 and "Packs left unopened" or "All packs opened")
-    button:Disable()
-    Note(unopened > 0 and "Packs left unopened" or "All packs opened", false, state)
-    return
-  end
   button:SetText(KeyLabel("Open next pack", "open"))
   -- Greyed under a Verify scene's lock too: view.canOpen is the sample's own
   -- state (the page's text shows it), not whether this button may act
@@ -177,7 +168,7 @@ local function Paint(view)
   Note("Open next pack", enabled, why)
 end
 
--- Called on every progress refresh: the button, then what the Interact key does
+-- Called from the Progress page's refresh: the button, then what the Interact key does
 function SecureOpen.Update(view)
   Paint(view)
   if Views.InteractKey then Views.InteractKey.Sync() end

@@ -61,7 +61,7 @@ local ST = {
   WAITING_FOR_PURCHASE = "WAITING_FOR_PURCHASE", READY_TO_OPEN = "READY_TO_OPEN",
   WAITING_FOR_OPEN = "WAITING_FOR_OPEN", WAITING_FOR_LOOT = "WAITING_FOR_LOOT",
   PAUSED = "PAUSED", COMPLETE = "COMPLETE", UNCERTAIN = "UNCERTAIN",
-  NEXT_STEP = "NEXT_STEP",   -- a multi-tier plan waits for the press that buys its next step
+  NEXT_STEP = "NEXT_STEP",   -- a plan between steps: a buy step waits for the player's press, an open step starts by itself
 }
 
 local function NewState()
@@ -133,7 +133,6 @@ end
 function Session.View()
   local obs = Observer.Current()
   local view = {
-    scene = S.scene,
     state = S.state, order = S.order, ledger = S.ledger, notice = S.notice, reason = S.reason,
     needsPress = S.needsPress, advisorOnly = S.advisorOnly, auto = S.auto, stopRequested = S.stopRequested,
     receipt = S.receipt, uncertainKind = S.uncertainKind,
@@ -515,8 +514,9 @@ local function Approve(fingerprint, autoOpen)
   Step()
 end
 
--- The reserve a plan step's source tier keeps: the player's own reserve, or,
--- for a tier the plan passes through without spending, its balance at the start
+-- The reserve a plan step's source tier keeps: the larger of the player's own
+-- reserve and, for a tier the plan passes through without spending, its balance
+-- at the start
 local function StepReserve(step)
   local plan = S.plan
   local obs = Observer.Current()
@@ -825,7 +825,7 @@ CobysCrestExchange.EventBus:Register(Session, {
 -- Game events forwarded by Observer
 -------------------------------------------------------------------------------
 local GAME_EVENTS = {
-  LOOT_READY = true, LOOT_OPENED = true, LOOT_CLOSED = true, UI_ERROR_MESSAGE = true,
+  LOOT_OPENED = true, LOOT_CLOSED = true, UI_ERROR_MESSAGE = true,
   PLAYER_REGEN_DISABLED = true, PLAYER_REGEN_ENABLED = true,
   ADDON_ACTION_BLOCKED = true, ADDON_ACTION_FORBIDDEN = true,
 }

@@ -77,8 +77,8 @@ local function AchievementLines(lines, r, out)
     lines[#lines + 1] = string.format("Needs the achievement %s on this character.", U.WrapColor(U.Colors.STATUS_GOLD, tostring(r.name)))
   end
   lines[#lines + 1] = string.format("Every gear slot must have reached item level %d at some point. Average item level doesn't count.", r.threshold)
-  -- The slots go in the table (lowest first, as Watermarks sorts them), the
-  -- weapons as one row: the best set reached, as the unlock counts it
+  -- The slots go in the table (lowest first, as Watermarks sorts them), then
+  -- the weapons as one last row: the best set reached, as the unlock counts it
   local slots = {}
   for _, row in ipairs(r.watermarks or {}) do
     if not row.weapon then
@@ -133,7 +133,7 @@ local function ReasonLines(result, out)
     lines[#lines + 1] = "Whether he offers it shows when you talk to Vaskarn."
   end
   lines[#lines + 1] = ""
-  lines[#lines + 1] = "Unlocks count per character; the upgrade discount is shared by your warband."
+  lines[#lines + 1] = "Unlocks are earned per character, so only this character's item levels count."
   return lines
 end
 
@@ -157,7 +157,7 @@ local function Build(host)
       { key = "slot", label = "Slot", stretch = true, sortable = false,
         icon = function(row) return SlotIcon(row.slot) end, text = function(row) return row.label end },
       { key = "yours", label = "Yours", width = 64, justify = "RIGHT", sortable = false,
-        tooltip = "The highest item level this slot has reached on this character",
+        tooltip = "The highest item level you have ever had in this slot on this character",
         text = function(row) return Level(row.yours) end, color = function(row) return row.ok and green or red end },
       { key = "needs", label = "Needs", width = 64, justify = "RIGHT", sortable = false,
         text = function(row) return Level(row.needs) end },

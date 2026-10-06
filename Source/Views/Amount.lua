@@ -102,10 +102,10 @@ local function PreviewModel(page, ctx, q)
     local node = { icon = t and t.currency.icon, value = T.Count(t and t.currency.ok and t.currency.quantity or nil),
       dim = tier.key ~= q.sourceTier and tier.key ~= q.destTier }
     if ok and tier.key == q.sourceTier and q.sourceBefore then
-      node.value, node.valueColor = T.Count(q.sourceBefore) .. " > " .. T.Count(q.sourceAfter), { 1, 0.55, 0.3 }
+      node.value, node.valueColor = T.Change(q.sourceBefore, q.sourceAfter), { 1, 0.55, 0.3 }
       node.sub = "You spend " .. T.Count(q.spend)
     elseif ok and tier.key == q.destTier and q.destBefore then
-      node.value, node.valueColor = T.Count(q.destBefore) .. " > " .. T.Count(q.destAfterOpen), { 0.3, 1, 0.3 }
+      node.value, node.valueColor = T.Change(q.destBefore, q.destAfterOpen), { 0.3, 1, 0.3 }
       node.sub = q.roomKind == "none" and "No cap" or ("Room after: " .. T.Count(q.roomAfter))
     end
     node.glow = tier.key == q.destTier
@@ -213,7 +213,7 @@ local function RefreshControls(page, q, ctx)
   r:SetShown(q.status == "rounding")
   if q.status == "rounding" then
     r.down, r.up = q.rounding.down, q.rounding.up
-    r.Text:SetText(string.format("Packs hold %s crests. Choose", T.Count(q.yield)))
+    r.Text:SetText(string.format("%s per pack. Choose:", T.Count(q.yield)))
     r.Down:SetShown(r.down ~= nil); r.Down:SetText(r.down and T.Count(r.down) or "")
     r.Up:SetShown(r.up ~= nil); r.Up:SetText(r.up and T.Count(r.up) or "")
   end

@@ -45,7 +45,7 @@ function Buyer.NextChunk(order, ledger, obs, unsettled)
   local cost = slot.costs[1] and slot.costs[1].amount
   if cost ~= order.cost then return nil, "offer_changed" end
 
-  local held, srcTier = Balance(obs, order.sourceCurrencyID)
+  local held = Balance(obs, order.sourceCurrencyID)
   local _, dstTier = Balance(obs, order.destCurrencyID)
   if not held or not dstTier then return nil, "unknown_balance" end
   local byBalance = math.floor(math.max(0, held - (order.reserve or 0)) / cost)
@@ -62,7 +62,7 @@ function Buyer.NextChunk(order, ledger, obs, unsettled)
     return nil, "stock"
   end
   local packsNow = obs.packs and obs.packs[order.key] or 0
-  return { index = index, qty = qty, base = { packs = packsNow, source = held } }, nil, srcTier
+  return { index = index, qty = qty, base = { packs = packsNow, source = held } }
 end
 
 function Buyer.Send(index, qty)

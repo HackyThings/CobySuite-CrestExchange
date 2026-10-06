@@ -95,8 +95,6 @@ function Merchant.ReadSlot(index)
     stackCount = Num(info.stackCount) or 1,
     numAvailable = Num(info.numAvailable) or -1,
     isPurchasable = info.isPurchasable ~= false,
-    isUsable = info.isUsable ~= false,
-    hasExtendedCost = info.hasExtendedCost == true,
     currencyIDSold = Num(info.currencyID),
     maxStack = Num(Seams.Call("MaxStack", index)) or 1,
     refundable = Seams.Call("Refundable", index) == true,

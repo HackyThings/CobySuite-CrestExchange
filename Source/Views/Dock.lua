@@ -12,8 +12,8 @@
 -- hooked; nothing of theirs is moved or hidden.
 --
 -- Away from the vendor, and with Saved position, the window uses its saved
--- spot (dragging it saves it). At the vendor the dock always wins, so a drag
--- there lasts for that visit only. The window never jumps while an exchange
+-- spot (dragging it saves it). At the vendor the dock wins (except with Saved
+-- position), so a drag there lasts for that visit only. The window never jumps while an exchange
 -- is under way, and when the vendor closes it stays exactly where it is on
 -- screen (FloatFree).
 --

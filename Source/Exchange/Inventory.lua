@@ -17,7 +17,7 @@ local function Whole(n)
   return U.IsFiniteNumber(n) and n >= 0
 end
 
--- { [productKey] = count } for every product with a known item ID
+-- { [productKey] = count } for every product (0 when its item ID is not known yet)
 function Inventory.Counts(season)
   local counts = {}
   for _, product in ipairs(season.products) do
@@ -39,20 +39,20 @@ local function EachSlot(visit)
   end
 end
 
--- The first unlocked slot holding itemID: bag, slot, info; or nil, "locked" / "none"
+-- The first unlocked slot holding itemID: bag, slot; or nil, "locked" / "none"
 function Inventory.FindSlot(itemID)
-  local foundBag, foundSlot, foundInfo, sawLocked
+  local foundBag, foundSlot, sawLocked
   EachSlot(function(bag, slot, info)
     if type(info) == "table" and info.itemID == itemID then
       if info.isLocked then
         sawLocked = true
       else
-        foundBag, foundSlot, foundInfo = bag, slot, info
+        foundBag, foundSlot = bag, slot
         return true
       end
     end
   end)
-  if foundBag then return foundBag, foundSlot, foundInfo end
+  if foundBag then return foundBag, foundSlot end
   return nil, sawLocked and "locked" or "none"
 end
 

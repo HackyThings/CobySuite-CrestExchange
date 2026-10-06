@@ -1,14 +1,12 @@
 -------------------------------------------------------------------------------
 -- CobysCrestExchange Views.BeforeYouSpend: facts to check, nothing assumed
 --
--- Three sections, each with a header:
+-- Two sections, each with a header:
 --   Your upgrade tracks   one bar per track: how far your equipped items on
 --                         it are upgraded, and how many ranks are left. Ranks
 --                         are not a crest cost (discounts and watermarks
 --                         change what a rank costs), and nothing here labels
 --                         crests as spare.
---   Lowest item levels    the lowest gear watermarks (you and your warband);
---                         weapons as one line, your best set
 --   Keep at least         a reserve per tier, with its crest icon, which Max
 --                         and every exchange from that tier respect: one
 --                         row of five columns, held just above Back so the
@@ -21,33 +19,38 @@ local T = Views.Text
 local UI = CobySuite_CobysCrestExchange.UI
 local U = CobySuite_CobysCrestExchange.Utilities
 local Gear = CobysCrestExchange.Gear
-local Eligibility = CobysCrestExchange.Eligibility
 local Store = CobysCrestExchange.Store
 local E = CobysCrestExchange.Events
 
-local MAX_SLOTS = 4
 local MAX_TRACKS = 5
 local ROW_H = 20
 
-local function Header(host, atlas, text, anchor, y)
-  local icon = host:CreateTexture(nil, "ARTWORK")
+-- A section header: icon, title and a rule to the right edge, in a
+-- full-width row the caller places by both top (or bottom) corners, so the
+-- rule's two ends sit at the same height (Task #236)
+local function Header(host, atlas, text)
+  local row = CreateFrame("Frame", nil, host)
+  row:SetHeight(16)
+  local icon = row:CreateTexture(nil, "ARTWORK")
   icon:SetAtlas(atlas)
   icon:SetSize(16, 16)
-  icon:SetPoint("TOPLEFT", anchor, anchor == host and "TOPLEFT" or "BOTTOMLEFT", anchor == host and 4 or 0, y)
-  local title = host:CreateFontString(nil, "OVERLAY", U.Fonts.HEADING)
+  icon:SetPoint("LEFT", 0, 0)
+  local title = row:CreateFontString(nil, "OVERLAY", U.Fonts.HEADING)
   title:SetPoint("LEFT", icon, "RIGHT", 6, 0)
   title:SetText(text)
-  local line = host:CreateTexture(nil, "ARTWORK")
+  local line = row:CreateTexture(nil, "ARTWORK")
   line:SetHeight(1)
   local gold = U.Colors.STATUS_GOLD
   line:SetColorTexture(gold[1], gold[2], gold[3], 0.35)
   line:SetPoint("LEFT", title, "RIGHT", 8, 0)
-  line:SetPoint("RIGHT", host, "RIGHT", -4, 0)
-  return icon
+  line:SetPoint("RIGHT", row, "RIGHT", -4, 0)
+  return row
 end
 
 local function BuildTracks(host, page)
-  page.TracksHead = Header(host, "common-icon-forwardarrow", "Your upgrade tracks", host, -4)
+  page.TracksHead = Header(host, "common-icon-forwardarrow", "Your upgrade tracks")
+  page.TracksHead:SetPoint("TOPLEFT", host, "TOPLEFT", 4, -4)
+  page.TracksHead:SetPoint("TOPRIGHT", host, "TOPRIGHT", 0, -4)
   page.bars = {}
   for i = 1, MAX_TRACKS do
     local bar = CreateFrame("StatusBar", nil, host)
@@ -73,15 +76,6 @@ local function BuildTracks(host, page)
   page.TrackNote:SetTextColor(0.65, 0.65, 0.65)
 end
 
-local function BuildLowest(host, page)
-  page.LowHead = Header(host, "common-icon-rotateright", "Lowest item levels reached", page.TrackNote, -12)
-  page.Low = host:CreateFontString(nil, "OVERLAY", U.Fonts.BODY)
-  page.Low:SetPoint("TOPLEFT", page.LowHead, "BOTTOMLEFT", 2, -6)
-  page.Low:SetPoint("RIGHT", host, "RIGHT", -6, 0)
-  page.Low:SetJustifyH("LEFT")
-  page.Low:SetSpacing(3)
-end
-
 local KEEP_COL = 74   -- one tier's column: its name over its icon and box
 
 local function BuildReserves(host, page)
@@ -91,9 +85,16 @@ local function BuildReserves(host, page)
   row:SetPoint("BOTTOMRIGHT", host, "BOTTOMRIGHT", -2, 34)
   row:SetHeight(38)
   page.KeepRow = row
-  page.KeepHead = Header(host, "common-icon-checkmark", "Keep at least", row, 0)
-  page.KeepHead:ClearAllPoints()
-  page.KeepHead:SetPoint("BOTTOMLEFT", row, "TOPLEFT", 2, 6)
+  -- What the boxes do and how they save, over them (Task #236)
+  page.KeepNote = host:CreateFontString(nil, "OVERLAY", U.Fonts.DATA)
+  page.KeepNote:SetPoint("BOTTOMLEFT", row, "TOPLEFT", 2, 6)
+  page.KeepNote:SetPoint("BOTTOMRIGHT", row, "TOPRIGHT", -4, 6)
+  page.KeepNote:SetJustifyH("LEFT")
+  page.KeepNote:SetTextColor(0.65, 0.65, 0.65)
+  page.KeepNote:SetText("Max and exchanges keep at least these. Leaving a box saves it.")
+  page.KeepHead = Header(host, "common-icon-checkmark", "Keep at least")
+  page.KeepHead:SetPoint("BOTTOMLEFT", page.KeepNote, "TOPLEFT", 0, 6)
+  page.KeepHead:SetPoint("BOTTOMRIGHT", page.KeepNote, "TOPRIGHT", 4, 6)
   page.reserves = {}
   for i = 1, 5 do
     local label = row:CreateFontString(nil, "OVERLAY", U.Fonts.SMALL)
@@ -122,7 +123,6 @@ end
 local function Build(host)
   local page = {}
   BuildTracks(host, page)
-  BuildLowest(host, page)
   BuildReserves(host, page)
   page.Back = UI.CreateButton(host, { text = "Back", size = { 90, 22 }, point = { "BOTTOMLEFT", host, "BOTTOMLEFT", 0, 4 },
     onClick = function() Window.Go("overview") end })
@@ -171,30 +171,9 @@ local function RefreshTracks(page, season)
   page.TrackNote:SetPoint("TOPLEFT", page.TracksHead, "BOTTOMLEFT", 2, -6 - last * ROW_H)
 end
 
-local function LowestText()
-  local rows, _, _, weapons = Eligibility.Watermarks(nil)
-  -- Weapon categories you never used read near 0, so weapons show as one
-  -- line: your best two-hander or one-hand pair
-  local list = {}
-  for _, row in ipairs(rows) do
-    if row.char and not row.weapon then list[#list + 1] = { label = T.Slot(row.slot), char = row.char, account = row.account } end
-  end
-  if weapons and weapons.char > 0 then list[#list + 1] = { label = "Weapons", char = weapons.char, account = weapons.account } end
-  table.sort(list, function(a, b) return a.char < b.char end)
-  local lines = {}
-  for i = 1, math.min(MAX_SLOTS, #list) do
-    local row = list[i]
-    lines[#lines + 1] = string.format("%s   %s  |cff888888(warband %s)|r", row.label, U.WrapColor("FFFFFF", tostring(row.char)),
-      tostring(row.account or "?"))
-  end
-  lines[#lines + 1] = U.WrapColor(U.Colors.LABEL_GRAY, "Keep crests you'll want for replacements, another spec or crafting.")
-  return table.concat(lines, "\n")
-end
-
 local page = Window.AddPage("before", Build)
 function page:Refresh(ctx)
   RefreshTracks(self, ctx.season)
-  self.Low:SetText(LowestText())
   for i, entry in ipairs(self.reserves) do
     local tier = ctx.season and ctx.season.tiers[i]
     for _, region in ipairs({ entry.icon, entry.label, entry.input }) do region:SetShown(tier ~= nil) end

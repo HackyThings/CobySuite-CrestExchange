@@ -10,7 +10,7 @@ A better crest exchange at Vaskarn in Silvermoon (WoW Midnight 12.1). Choose how
 
 - Every way of getting your crests, priced for the amount you choose.
 - Plans across your lower tiers, with crest packs already in your bags counted.
-- Your balance, the room left under each cap, and crests waiting in unopened packs.
+- Your balance and a cap meter per tier: how full each cap is, the crests waiting in unopened packs, and a MAX mark at a cap.
 - A reserve per tier that Max and every exchange leave alone.
 - Locked trades explained, down to the gear slot.
 - Your Interact key can run the whole exchange.

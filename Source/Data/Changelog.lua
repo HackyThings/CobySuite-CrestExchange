@@ -15,6 +15,29 @@ CobysCrestExchange.Data = CobysCrestExchange.Data or {}
 
 CobysCrestExchange.Data.Changelog = {
   {
+    version = "0.0.3",
+    title = "Cap meters and MAX",
+    date = "2026-10-06",
+    new = {
+      "First page: the whole flow in one line until your first exchange",
+      "Opening packs: a progress bar",
+      "MAX: a green check and MAX on a tier at its cap",
+    },
+    changed = {
+      "Cap meters: each tier fills toward its cap",
+      "Receipts: tiles per tier with each crest's icon",
+      "Plan from lower tiers, and Trade requirements for locked trades",
+      "Review: says what comes after Confirm",
+      "Get page: says why a route is closed",
+      "Settings: Cancel is now Undo edits",
+      "Many smaller look and wording improvements",
+    },
+    fixed = {
+      "Unopened packs note counts what Open packs opens",
+      "Several smaller bug fixes",
+    },
+  },
+  {
     version = "0.0.2",
     title = "Settings and docking",
     date = "2026-10-01",

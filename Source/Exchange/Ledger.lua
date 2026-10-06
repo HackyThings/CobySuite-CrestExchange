@@ -87,8 +87,8 @@ function Ledger.RecordOpen(ledger, crests)
   ledger.received = ledger.received + (crests or 0)
 end
 
--- Raising an order is a new approval: the new allowance is what was bought
--- plus the newly approved packs, never more than was left before
+-- Re-approving an order can only lower what is left: the new allowance is what
+-- was bought plus the newly approved packs, never more than was left before
 function Ledger.Reapprove(order, ledger, newPacks)
   local remaining = Ledger.Remaining(order, ledger)
   newPacks = math.min(newPacks, remaining)
@@ -112,10 +112,10 @@ function Ledger.Summary(order, ledger, bagCount, balanceNow)
   }
 end
 
--- ok, order, ledger (cleaned copies) for a saved record
 local ORDER_WHOLE = { "approvedPacks", "yield", "cost", "reserve" }
 local LEDGER_WHOLE = { "purchased", "spent", "opened", "received", "openQuota" }
 
+-- ok, order, ledger (cleaned copies) for a saved record
 function Ledger.Validate(order, ledger)
   if type(order) ~= "table" or type(ledger) ~= "table" then return false end
   if type(order.id) ~= "string" or type(order.key) ~= "string" or not Whole(order.itemID) then return false end

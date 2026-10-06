@@ -4,8 +4,9 @@
 -- For "Before you spend": per upgrade track, how many equipped items are on
 -- it and how many ranks they have left (C_Item.GetItemUpgradeInfo). This is
 -- not a crest cost: discounts, watermarks and the item itself change what a
--- rank costs, and the addon never labels crests as spare from it. Items the
--- game gives no upgrade info for are counted separately, never as zero need.
+-- rank costs, and the addon never labels crests as spare from it. Equipped
+-- items whose upgrade info has no readable track are counted separately, never
+-- as zero need.
 -------------------------------------------------------------------------------
 
 local Gear = {}

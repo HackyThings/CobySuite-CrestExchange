@@ -5,7 +5,7 @@
 -- the compact size preset, 640 x 460) with three categories (redesigned 2026-10-01,
 -- Task #53):
 --   Exchange      When visiting Vaskarn (three picture tiles: the window, its
---                 small tab, or nothing) and Crests to keep (a button to the
+--                 small tab, or nothing) and Keep at least (a button to the
 --                 exchange window's Before you spend page, where reserves
 --                 are edited; they are per character, so not settings)
 --   Interact key  a card with the player's own Interact key and whether it
@@ -50,7 +50,7 @@ local function Rect(host, color, w, h)
   return t
 end
 
--- parts: { "right" | "left" | "tab" | "apart" | "both" | "closed" }
+-- kind: "right" | "left" | "tab" | "apart" | "both" | "closed"
 local function Scene(kind)
   return function(frame)
     local brand = { U.HexToRGB(CobysCrestExchange.BRAND_COLOR) }
@@ -170,18 +170,18 @@ local window = UI.CreateSettingsWindow({
           },
           description = "The collapse button on the window hides it to the tab for this visit only; this choice decides every visit.",
         }
-        panel:Section("Crests to keep", { atlas = "AdventureMapIcon-Lock" })
+        panel:Section("Keep at least", { atlas = "common-icon-checkmark" })
         panel:Button{
-          text = "Set crests to keep...", width = 190, atlas = "AdventureMapIcon-Lock",
+          text = "Set Keep at least...", width = 190, atlas = "common-icon-checkmark",
           tooltip = "Open the exchange window on Before you spend.",
           -- A review or an exchange under way holds the window on its own
           -- page; a finished exchange's receipt is closed first
           enabledWhen = function() return NavBlock() ~= "busy" end,
           description = function()
             if NavBlock() == "busy" then
-              return "Available once the exchange under way is finished or discarded: the exchange window stays on it until then."
+              return "Finish or discard the exchange under way to change these amounts: the exchange window stays on it until then."
             end
-            return "How many of each crest Max and your trades leave alone. Set in the exchange window, for each character."
+            return "How many crests of each tier to keep on this character. Max and every exchange leave them alone."
           end,
           onClick = function(w)
             local Window = Views().Window
@@ -223,13 +223,14 @@ local window = UI.CreateSettingsWindow({
           tooltip = "Off: the addon never changes the game's Enable Interact Key setting. Target Vaskarn yourself before pressing the key.",
           description = "Between plan steps, switches Enable Interact Key on if it's off so your key can talk to Vaskarn, then restores your setting.",
         }
-        panel:Section("Depending on the current step")
+        panel:Section("When it's on, step by step")
         panel:Bullets{ items = {
           { title = "Buys the next packs", icon = CobysCrestExchange.ICON,
             lines = { "At Vaskarn, after you confirm the exchange." } },
           { title = "Closes Vaskarn's window", atlas = "common-icon-redx",
             lines = { "A pack used while a vendor is open would be sold." } },
-          { title = "Opens the next pack", icon = "Interface\\Icons\\INV_Misc_Bag_08" },
+          { title = "Opens the next pack", icon = "Interface\\Icons\\INV_Misc_Bag_08",
+            lines = { "One pack per press, once the vendor's window is closed." } },
           { title = "Talks to Vaskarn", icon = "Interface\\Icons\\INV_Misc_GroupNeedMore",
             lines = { "Only when a plan needs another visit to him." } },
         } }

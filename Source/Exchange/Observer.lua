@@ -4,8 +4,7 @@
 -- Game data events mark the snapshot stale; a coalesced rebuild (0.1 s) reads
 -- the merchant (only at an exchange vendor), every crest currency, the packs
 -- in the bags and bag space, then fires ObservationsChanged(obs). Each
--- snapshot carries a version number, so anything built from it (a quote, a
--- review) can tell when it has gone stale.
+-- snapshot carries a version number.
 --
 --   obs = { version, at, season, inCombat,
 --     merchant = { open, isExchange, npcID, vendorName, inInstance, filterAll,
@@ -14,8 +13,8 @@
 --     packs = { [productKey] = count }, packSpace = { [productKey] = n },
 --     lastSeen = Store offers (for the away view) }
 --
--- Loot, error, combat and blocked-action events go straight to Session
--- (Session.OnGameEvent): only it needs them, with their payloads.
+-- Loot, error, combat and blocked-action events are also forwarded to Session
+-- (Session.OnGameEvent) with their payloads.
 -------------------------------------------------------------------------------
 
 local Observer = {}

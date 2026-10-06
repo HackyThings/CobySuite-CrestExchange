@@ -9,8 +9,9 @@
 --
 -- The verification fields and the notes below record what the Vaskarn dump
 -- confirmed: the season and the packs are marked verified; Adventurer of the
--- Mist's achievement ID remains marked candidate. A wrong ID only makes an offer show as
--- unsupported; nothing is bought on the strength of this table alone, since
+-- Mist's achievement ID remains marked candidate. A wrong item ID only makes an offer show as
+-- unsupported, and a wrong achievement ID only loses the reason shown for a
+-- locked trade; nothing is bought on the strength of this table alone, since
 -- an offer must also match the live merchant's cost signature.
 --
 -- CAPABILITIES are the behaviors the in-game Exchange Check settles (named
@@ -65,9 +66,9 @@ Seasons.LIST = {
       { key = "myth",       label = "Myth",       currencyID = 3446, quality = 5 },
     },
     -- kind "up" trades three of a tier for one of the next (30 for a pack of
-    -- 10); "down" trades one for one into the tier below (10 for a pack of 10). countsTowardEarningLimit and
-    -- requiresOpeningHeadroom stay true (the conservative policy) until the
-    -- Exchange Check says otherwise.
+    -- 10); "down" trades one for one into the tier below (10 for a pack of 10).
+    -- countsTowardEarningLimit and requiresOpeningHeadroom stay true (the
+    -- conservative policy).
     products = {
       -- Verified at Vaskarn 2026-09-30 (the first in-game visit): each 30 of its
       -- source crest for a pack of 10, NPC 239676, source currencies 3442 to 3445

@@ -8,7 +8,7 @@ local Config = CobysCrestExchange.Config
 ---------------------------------------------------------------------------
 
 -- The saved settings from before the change: Show at Vaskarn off becomes
--- Stay closed, a remembered collapse becomes Show a small tab. Both old keys
+-- Stay closed, a remembered collapse becomes Small tab. Both old keys
 -- are removed, so this runs once. saved: the config's SavedVariable (its
 -- defaults already filled); windowState: COBYS_CREST_EXCHANGE_WINDOW_STATE.
 function Config.MigrateOpening(saved, windowState)
