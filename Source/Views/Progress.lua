@@ -453,7 +453,7 @@ local function Next(page, ctx, view)
   elseif view.reason and view.reason ~= "restored" and view.reason ~= "merchant_closed" and view.reason ~= "combat" then
     msg = T.StepBlocked(view.reason)
   else
-    msg = "The button below buys the next step, then closes Vaskarn's window and opens each pack, one press per pack."
+    msg = "The button below buys the next step, then opens each pack, one press per pack."
   end
   page.Message:SetText(msg)
   Only(page, page.Discard)

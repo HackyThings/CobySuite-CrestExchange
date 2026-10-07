@@ -18,7 +18,7 @@
 --     season = season,
 --     nodes = { [tierKey] = { value = "120", valueColor = {r,g,b}, sub = "Room 45", icon = fileID,
 --                             glow = bool, dim = bool, spend = nil|true|false,
---                             meter = nil|{ frac, packed, full, used, limit, label } (a cap meter behind
+--                             meter = nil|{ frac, packed, full, used, limit, label, uncapped } (a cap meter behind
 --                             the text; a full one also gets a still check and MAX in the status column,
 --                             Task #269) } },
 --     links = { [upperTierKey] = { state = "idle"|"locked"|"pending"|"current"|"done", label = "...",
@@ -56,6 +56,8 @@ local METER_ALPHA, PACKS_ALPHA, FULL_ALPHA = 0.16, 0.08, 0.22
 -- moves with the count's width
 local NAME_X, NAME_TOP, DETAIL_TOP, STATUS_FROM_RIGHT = 44, -6, -23, -80
 local COUNT_W, STATUS_W = 64, 48
+-- A compact tile: from its right edge, where the detail line must stop (Task #296)
+local SPEND_CLEAR, VALUE_CLEAR = -176, -84
 local TALL_NAME_RIGHT, TALL_DETAIL_RIGHT = -136, -84
 local SAGE = U.Colors.SAGE_GREEN
 local SHADOW = { 0, 0, 0, 0.85 }
@@ -155,7 +157,11 @@ local function BuildNode(ladder, parent, opts)
   else
     -- A compact tile: the name and the line under it share one line
     node.Name:SetPoint("LEFT", node.Icon, "RIGHT", 8, 0)
+    -- Its right edge is set in DrawNode (it stops short of the Spend box and
+    -- the count, Task #296): one line, cut with an ellipsis, the tooltip whole
     node.Sub:SetPoint("LEFT", node.Name, "RIGHT", 10, 0)
+    node.Sub:SetJustifyH("LEFT")
+    node.Sub:SetWordWrap(false)
     node.Value:SetPoint("RIGHT", -10, 0)
     node.Value:SetJustifyH("RIGHT")
   end
@@ -183,6 +189,13 @@ local function BuildNode(ladder, parent, opts)
   pulse:SetToAlpha(0.45)
   pulse:SetDuration(0.9)
   UI.AddHoverHighlight(node)
+  node:HookScript("OnEnter", function(self)
+    if self.tall or not self.Sub:IsTruncated() then return end
+    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+    GameTooltip:AddLine(self.Sub:GetText() or "", 1, 1, 1, true)
+    GameTooltip:Show()
+  end)
+  node:HookScript("OnLeave", function(self) if GameTooltip:IsOwned(self) then GameTooltip:Hide() end end)
   node:SetScript("OnClick", function(self)
     if ladder.opts.onClick and self.tierKey then ladder.opts.onClick(self.tierKey) end
   end)
@@ -291,6 +304,11 @@ local function DrawNode(node, season, tier, data)
   local capped = m ~= nil and m.full == true
   node.Name:SetText(U.WrapColor(hex, tier.label))
   node.Sub:SetText(m and Views.Text.MeterLine(m) or data.sub or "")
+  if not node.tall then
+    -- The detail line ends before the Spend control (its box, its label) or, with
+    -- none, before the count, so it never draws over either
+    node.Sub:SetPoint("RIGHT", node, "RIGHT", data.spend ~= nil and SPEND_CLEAR or VALUE_CLEAR, 0)
+  end
   node.Value:SetText(data.value or "")
   local vc = data.valueColor
   if vc then node.Value:SetTextColor(vc[1], vc[2], vc[3]) else node.Value:SetTextColor(WHITE[1], WHITE[2], WHITE[3]) end

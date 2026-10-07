@@ -18,6 +18,7 @@
 --     footer     = "Open this guide any time with /ma guide",   -- optional: a strip along the
 --                                                        -- bottom that doesn't scroll (color codes welcome)
 --     width = 580, height = 620,                           -- the defaults
+--     resizable  = { minWidth = 440, minHeight = 320, maxWidth = 1000, maxHeight = 1100 },  -- the defaults
 --     persist    = { svTable = function() return MY_STATE end, key = "guide" },  -- optional
 --     singleOpen = false,                  -- true: opening a section closes the others
 --     expanded   = { "search" },           -- keys open at first; default the first section
@@ -36,6 +37,11 @@
 --                       enabled = function() return true end,                   -- section talks about;
 --                       label = function() return "Building..." end } },        -- enabled and label are
 --                                                               -- read again on show and after a click
+--         content = {                                           -- optional: frames of the caller's own
+--           build   = function(body) return frame end,          -- under the text, built once
+--           layout  = function(frame, width) return height end, -- each layout while the section is open
+--           release = function(frame) end,                      -- optional: the section closed or the
+--         },                                                    -- guide hid (drop textures)
 --       },
 --     },
 --   })
@@ -336,6 +342,7 @@ local function BuildSection(guide, def)
     try:SetText(table.concat(lines, "\n"))
     s.tryLabel, s.try = label, try
   end
+  if def.content then s.content = def.content.build(body) end
   if def.buttons and #def.buttons > 0 then BuildButtons(guide, s, body, def.buttons) end
   body:Hide()
 
@@ -353,6 +360,15 @@ local function MeasureBody(s, width)
     s.try:SetWidth(textWidth)
     h = h + 10 + s.tryLabel:GetStringHeight() + 4 + s.try:GetStringHeight()
   end
+  if s.content then
+    h = h + 10
+    s.content:ClearAllPoints()
+    s.content:SetPoint("TOPLEFT", s.body, "TOPLEFT", BODY_LEFT, -h)
+    s.content:SetWidth(textWidth)
+    local contentHeight = s.def.content.layout(s.content, textWidth) or 0
+    s.content:SetHeight(math.max(1, contentHeight))
+    h = h + contentHeight
+  end
   if s.buttons and s.buttons[1] then
     h = h + 10
     s.buttons[1]:ClearAllPoints()
@@ -360,6 +376,11 @@ local function MeasureBody(s, width)
     h = h + 22
   end
   return math.ceil(h + PAD)
+end
+
+-- A section's own content lets go of what it holds while it can't be seen
+local function ReleaseContent(s)
+  if s.content and s.def.content.release then s.def.content.release(s.content) end
 end
 
 function GuideMixin:Relayout()
@@ -400,6 +421,7 @@ function GuideMixin:Relayout()
       y = y + h
     else
       s.body:Hide()
+      ReleaseContent(s)
     end
     y = y + GAP
   end
@@ -447,7 +469,7 @@ function UI.CreateGuideWindow(opts)
     icon         = opts.icon,
     width        = opts.width or 580,
     height       = opts.height or 620,
-    resizable    = { minWidth = 440, minHeight = 320, maxWidth = 1000, maxHeight = 1100 },
+    resizable    = opts.resizable or { minWidth = 440, minHeight = 320, maxWidth = 1000, maxHeight = 1100 },
     escapeCloses = opts.name ~= nil,
     persist      = opts.persist,
     point        = not opts.persist and { "CENTER", UIParent, "CENTER", 0, 40 } or nil,
@@ -525,6 +547,9 @@ function UI.CreateGuideWindow(opts)
   f:RestoreState()
   f:SetScript("OnSizeChanged", function(self) self:Relayout() end)
   f:HookScript("OnShow", function(self) self:RefreshBodies() end)
+  f:HookScript("OnHide", function(self)
+    for _, s in ipairs(self.sections) do ReleaseContent(s) end
+  end)
   f:Relayout()
   return f
 end

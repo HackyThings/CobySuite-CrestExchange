@@ -44,8 +44,8 @@ Guide.SECTIONS = {
     summary = "One press per pack.",
     body = { T.Bullets({
         "One button in the same place runs the exchange.",
-        "It closes Vaskarn's window, opens one pack per press, and buys a plan's next step.",
-        "A pack used while a vendor window is open is sold, so the button closes it first. Pressing quickly is safe.",
+        "It opens one pack per press and buys a plan's next step.",
+        "Packs open with Vaskarn's window open or closed. Pressing quickly is safe.",
         "Packs already in your bags get an Open packs banner on the first page, to open them without buying.",
         "Your Interact key also presses the button while this window is open and expanded. Use a key without Shift, Ctrl, Alt or Meta.",
         "It never works in combat. When a plan needs Vaskarn again, the same key talks to him.",
@@ -69,6 +69,7 @@ Guide.SECTIONS = {
         "Open packs soon: crests you earn elsewhere use the same room, and a pack that no longer fits waits in your bags.",
         "A tier with no room left reads " .. Views.Text.Max() .. ": the window names the cap, with numbers, and what still works.",
         "Weekly allowances return at the weekly reset. Season caps usually go up with each weekly reset.",
+        "When the game lifts a cap, that row keeps its color and reads Season earned with " .. Views.Text.UNCAPPED_MARK .. " after the slash. Nothing is held back for that cap, and the window follows the game if a cap comes back.",
     }) } },
   { key = "locked", title = "Locked trades", atlas = "common-icon-redx",
     summary = "What each trade needs.",
@@ -100,9 +101,12 @@ Guide.SECTIONS = {
       { "/ce settings", "Open or close the settings" },
       { "/ce guide", "Open this guide" },
       { "/ce changelog", "What changed in each version" },
+      { "/ce reset windows", "Put every window back to its default place and size" },
       { "/ce help", "Every command" },
     } },
 }
+-- The last section in every addon's guide: the list of every addon by Cobanyte
+Guide.SECTIONS[#Guide.SECTIONS + 1] = CobySuite_CobysCrestExchange.UI.AddonsGuideSection(CobysCrestExchange.AddonsList)
 
 local window = CobySuite_CobysCrestExchange.UI.CreateGuideWindow({
   name = "CobysCrestExchangeGuideWindow",

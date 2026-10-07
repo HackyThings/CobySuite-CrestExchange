@@ -131,6 +131,7 @@ end
 
 -- Why a known pack's slot does not have the expected price shape, or nil
 local function ShapeProblem(season, product, slot)
+  if not Seasons.IsTrade(product) then return "not one of his trades" end
   if slot.price ~= 0 then return "has a gold price" end
   if slot.stackCount ~= 1 then return "sells in bundles" end
   if slot.currencyIDSold then return "sells a currency" end

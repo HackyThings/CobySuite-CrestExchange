@@ -36,7 +36,7 @@ CobysCrestExchange.VERSION = VERSION
 -- Slash commands
 --
 -- The suite's standard set (CobySuite.Slash.StandardCommands: show, settings,
--- guide, changelog, debug, and test in development builds only, with the
+-- guide, changelog, addons, debug, reset windows, and test in development builds only, with the
 -- same aliases in every addon) plus this addon's own dump, registered through
 -- CobySuite.Slash, which generates help and version. Every module is defined
 -- in a later file, so each handler resolves it per call. The release build
@@ -49,6 +49,31 @@ local function ToggleWindow()
   if Views().Window then Views().Window.Toggle() end
 end
 
+-- "/ce addons" and the guide's last section: every addon by Cobanyte
+-- (CobySuite.UI.ToggleAddonsWindow, the same list in each addon)
+CobysCrestExchange.AddonsList = {
+  host = "CobysCrestExchange", slash = "/ce", icon = CobysCrestExchange.ICON,
+  message = function(text) CobysCrestExchange.Utilities.Message(text) end,
+  state = function() return COBYS_CREST_EXCHANGE_WINDOW_STATE end,
+}
+
+-- "/ce reset windows" (CobySuite.UI.ResetWindows): the exchange window, settings, guide, changelog
+-- and addon list all save into the window-state table, so it finds them; the debug window saves
+-- nothing and is listed, and the exchange window docks beside Vaskarn's window again if it is open there
+CobysCrestExchange.WindowsReset = {
+  host = "CobysCrestExchange", title = "Coby's Crest Exchange", icon = CobysCrestExchange.ICON,
+  message = function(text) CobysCrestExchange.Utilities.Message(text) end,
+  states = { function() return COBYS_CREST_EXCHANGE_WINDOW_STATE end },
+  windows = function()
+    local debugWindow = CobysCrestExchange.DebugWindow
+    return debugWindow and { debugWindow } or {}
+  end,
+  onReset = function()
+    local Window, Dock = Views().Window, Views().Dock
+    if Window and Dock and Window.frame:IsShown() then Dock.Place(Window.frame) end
+  end,
+}
+
 CobySuite_CobysCrestExchange.Slash.Register({
   key = "COBYSCRESTEXCHANGE",
   slashes = { "/ce", "/crestex", "/crestexchange" },
@@ -59,6 +84,7 @@ CobySuite_CobysCrestExchange.Slash.Register({
   commands = CobySuite_CobysCrestExchange.Slash.StandardCommands({
     show = ToggleWindow,
     showHelp = "Open or close the exchange window",
+    addons = CobysCrestExchange.AddonsList,
     settings = function()
       if CobysCrestExchange.Config.ToggleSettings then CobysCrestExchange.Config.ToggleSettings() end
     end,
@@ -67,6 +93,7 @@ CobySuite_CobysCrestExchange.Slash.Register({
     debug = function()
       if CobysCrestExchange.DebugWindow then CobysCrestExchange.DebugWindow:Toggle() end
     end,
+    resetWindows = CobysCrestExchange.WindowsReset,
     tests = function() return CobysCrestExchange.Tests end,
     extra = {
       {

@@ -148,7 +148,7 @@ local function PlanRoute(ctx, tierKey)
       if n and n > 0 and tier.key ~= tierKey then parts[#parts + 1] = T.Crests(season, tier.key, n) end
     end
     if Plan.OpenOnly(plan) then
-      route.line = string.format("Opens the packs you have (%s)", T.Crests(season, tierKey, plan.crests))
+      route.line = string.format("Opens the packs you have (%s)", T.Crests(season, tierKey, plan.gives or plan.crests))
     elseif #parts == 0 then
       -- Trades paid for by packs you open on the way: no balance goes down
       route.line = string.format("Opens your packs and trades in %d %s, no balance goes down", #plan.steps, T.Plural(#plan.steps, "step", "steps"))
@@ -208,6 +208,18 @@ end
 -- plan, else a trade up, else the open route that gives the most; never a trade down
 local function Choose(routes)
   return Plan.ChooseRoute(routes, S.route, S.crests ~= nil)
+end
+
+-- Packs of the tiers below that the plan would use but the cap keeps shut,
+-- each with what frees it (Task #292); the target's own are StillWorks'
+local function WaitingLines(page, ctx, tierKey, lines)
+  for _, r in ipairs(page.routes or {}) do
+    if r.kind == "plan" and r.plan then
+      for _, w in ipairs(r.plan.waiting or {}) do
+        if w.tier ~= tierKey then lines[#lines + 1] = T.WaitingLine(ctx.season, w, ctx.obs.tiers[w.tier]) end
+      end
+    end
+  end
 end
 
 -- What can still be done when a tier is at MAX or has no room for a pack
@@ -536,10 +548,12 @@ local function RefreshExisting(page, ctx, tierKey, y)
   existing.productKey = nil
   local t = ctx.obs.tiers[tierKey]
   if t and t.packs > 0 and not ctx.view.order then
-    -- The button opens one kind of pack, so the line counts that kind only
-    for _, product in ipairs(Seasons.TradesInto(ctx.season, tierKey)) do
+    -- The button opens one kind of pack, so the line counts that kind only:
+    -- the first kind (smallest first, reward packs too) that fits the cap now
+    local fits = CobysCrestExchange.Currency.Openable(t.room, t.packList).byKey
+    for _, product in ipairs(Seasons.PacksInto(ctx.season, tierKey)) do
       local n = ctx.obs.packs[product.key] or 0
-      if n > 0 and not existing.productKey then
+      if n > 0 and (fits[product.key] or 0) > 0 and not existing.productKey then
         existing.productKey = product.key
         existing.Text:SetText(string.format("%s ready to open: %s. Open them first.", T.Packs(n),
           T.Crests(ctx.season, tierKey, n * product.yield)))
@@ -571,6 +585,7 @@ local function NoneLines(page, ctx, tierKey, lines)
       or "No exchange can give you more of this tier right now: each route says why.")
   end
   for _, line in ipairs(StillWorks(page, ctx, tierKey)) do lines[#lines + 1] = line end
+  WaitingLines(page, ctx, tierKey, lines)
   local d = page.downRoute
   if d then
     local from = T.Tier(ctx.season, d.product.from)
@@ -676,6 +691,8 @@ local function SummaryText(page, ctx, tierKey, chosen, room)
     if #lines < fit then lines[#lines + 1] = PlanFlow(chosen.plan) end
   elseif chosen.ok then
     lines[#lines + 1] = FlowWords(1, 0)
+  else
+    WaitingLines(page, ctx, tierKey, lines)
   end
   return Finish(lines, ctx, chosen)
 end
@@ -694,10 +711,12 @@ local function ReviewReady(ctx, chosen)
   if chosen.kind == "plan" and Plan.OpenOnly(chosen.plan) then
     return not ctx.obs.inCombat and ctx.view.state == "SELECTING"
   end
+  -- A plan that starts by opening your packs is reviewed anywhere (Task #296)
+  local early = chosen.kind == "plan" and Plan.StartsWithOpen(chosen.plan)
   local planning = chosen.kind == "plan" and chosen.plan.planning or (chosen.kind == "trade" and chosen.quote.planning)
-  return not planning and not ctx.obs.inCombat and not ctx.view.advisorOnly
+  return (early or not planning) and not ctx.obs.inCombat and not ctx.view.advisorOnly
     and Seasons.CAPABILITIES.buyFromAddon == true
-    and ctx.obs.merchant.isExchange == true and ctx.view.state == "SELECTING"
+    and (early or ctx.obs.merchant.isExchange == true) and ctx.view.state == "SELECTING"
 end
 
 local page = Window.AddPage("source", Build)

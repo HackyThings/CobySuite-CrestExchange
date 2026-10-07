@@ -157,7 +157,9 @@ end
 function Eligibility.All(season, obs)
   local list = {}
   for _, product in ipairs(season.products) do
-    list[#list + 1] = { product = product, result = Eligibility.ForTrade(season, product, obs) }
+    if CobysCrestExchange.Seasons.IsTrade(product) then
+      list[#list + 1] = { product = product, result = Eligibility.ForTrade(season, product, obs) }
+    end
   end
   return list
 end

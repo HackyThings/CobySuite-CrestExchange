@@ -19,6 +19,11 @@
 -- An amount that is not a whole number of packs is never rounded silently:
 -- status "rounding" offers the pack amount below and above (the one above
 -- only when it fits Max).
+--
+-- The balance limit counts only crests you hold: a trade never opens packs.
+-- sourcePacks (Currency.Openable over the source tier's unopened packs) lets
+-- the window say when opening them first would pay for it, which a plan does
+-- (Task #292), or when the cap keeps them shut.
 -------------------------------------------------------------------------------
 
 local Quote = {}
@@ -143,6 +148,7 @@ function Quote.Build(obs, sel, opts)
   q.sourceAfter = q.sourceBefore and (q.sourceBefore - q.spend) or nil
   q.destAfterOpen = q.destBefore and (q.destBefore + q.crests) or nil
   if uncommitted and uncommitted ~= INF then q.roomAfter = math.max(0, uncommitted - q.crests) end
+  q.sourcePacks = Currency.Openable(src.room, src.packList)
   q.problems = Problems(obs, q, dst)
   q.fingerprint = table.concat({ q.key, packs, q.spend, q.crests, cost, tostring(offer.signature) }, "|")
   return q

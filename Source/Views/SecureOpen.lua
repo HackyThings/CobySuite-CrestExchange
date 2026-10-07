@@ -15,8 +15,9 @@
 -- It is the one button that runs an exchange or a plan, always in the same
 -- place, doing what Session.NextAction() says comes next:
 --   Open next pack             the secure item use (the only mode that uses an item)
---   Close the vendor's window  a pack used with a vendor open is sold, so
---                              this press closes it (HideUIPanel, the panel
+--   Close the vendor's window  only while CAPABILITIES.openAtVendor is off
+--                              (it is on since 2026-10-06, the player's own
+--                              /use opens a pack with a vendor open); this press closes it (HideUIPanel, the panel
 --                              manager's secure path) and opens nothing; the
 --                              next press opens
 --   Buy step N of M            a plan's next step, at Vaskarn; it ignores
@@ -27,9 +28,13 @@
 -- For every mode but Open, PreClick blanks the click's item action (type "")
 -- and runs the mode's own action instead; PostClick re-arms. For Open,
 -- PreClick still asks Session.MayOpen() and blanks the action on no.
--- Opening needs the vendor closed and buying needs it open, so a burst of
--- presses can't run from the last Open into the next Buy: the player has to
--- talk to Vaskarn in between. In combat the template itself refuses to act.
+-- With openAtVendor on (it is) packs open with Vaskarn's window open, so the
+-- last Open can lead straight into the next Buy. What keeps a burst of presses
+-- from running on into that purchase is the half-second guard above, and each
+-- buy is re-quoted live and refused on any change from the approved terms.
+-- Were the capability off, opening would need the window closed (the Close
+-- mode) and the player would talk to Vaskarn again before the next Buy. In
+-- combat the template itself refuses to act.
 -------------------------------------------------------------------------------
 
 local Views = CobysCrestExchange.Views

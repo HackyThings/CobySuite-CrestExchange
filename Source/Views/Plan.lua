@@ -129,7 +129,7 @@ local function Model(ctx, plan)
   -- Packs you have: said on the tier's tile, not as a trade between tiers
   for _, o in ipairs(opens) do
     local node = model.nodes[o.step.to]
-    if node then node.sub = string.format("Step %d: %s", o.index, T.StepWords(ctx.season, o.step)) end
+    if node then node.sub = string.format("Step %d: open %s", o.index, T.Packs(o.step.packs)) end
   end
   for _, tier in ipairs(ctx.season.tiers) do
     local entry = stepByTo[tier.key]
@@ -197,8 +197,10 @@ function page:Refresh(ctx)
     -- Only your own packs are opened: no vendor, no buying checks
     ok = not ctx.obs.inCombat and ctx.view.state == "SELECTING"
   else
-    ok = plan.status == "ok" and not plan.planning and not ctx.obs.inCombat and not ctx.view.advisorOnly
-      and ctx.obs.merchant.isExchange == true and ctx.view.state == "SELECTING"
+    -- A plan that starts by opening your packs is reviewed anywhere (Task #296)
+    local early = Plan.StartsWithOpen(plan)
+    ok = plan.status == "ok" and (early or not plan.planning) and not ctx.obs.inCombat and not ctx.view.advisorOnly
+      and (early or ctx.obs.merchant.isExchange == true) and ctx.view.state == "SELECTING"
   end
   self.Review:SetEnabled(ok == true)
 end

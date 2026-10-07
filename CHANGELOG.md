@@ -4,6 +4,26 @@ All notable changes to Coby's Crest Exchange are documented here. Format follows
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-10-06
+
+### Added
+
+- **Ready for the crest cap lifting.** When the game stops capping a crest tier, its row keeps its color and reads "Season earned: 745/∞", its tooltip says "No season cap now", and nothing in the window limits or warns about a cap for that tier. Each tier follows what the game reports, so a cap that comes back is shown again.
+- **Other addons by the same author.** `/ce addons` lists every addon Cobanyte has released, the same list in each of them: what it does, pictures you can click to see bigger, and its CurseForge link to copy into your browser. Addons you already have are marked. It only opens when you ask, and the guide's last section points to it. The list remembers its size and where you left it.
+- **Reset windows.** `/ce reset windows` puts every window back to its default place and size after you confirm; your settings and data are not touched.
+- **Reward packs count.** Warbound reward packs of Mistcrests (60 Veteran, 40 Champion or 20 Hero, a weekly quest's choice of reward) are counted like any other pack: plans open them when their crests are needed, and the Open packs banner offers them.
+
+### Changed
+
+- Plans count the packs in your bags only when they can open under the cap. A pack the cap keeps shut is named on the Get page with what frees it ("can't open until the cap rises"), and the plan works around it.
+- A trade up that is short of crests says when a pack in your bags would cover it, and that Plan from lower tiers opens it first.
+- **Packs open with Vaskarn's window open.** The exchange button opens a pack without asking you to close his window first.
+- A plan that starts by opening packs you hold can be reviewed and started wherever you are; its first purchase waits until you talk to Vaskarn.
+
+### Fixed
+
+- On Get from lower tiers, the line for the packs in your bags no longer draws over a tier's Spend box.
+
 ## [0.0.3] - 2026-10-06
 
 ### Added

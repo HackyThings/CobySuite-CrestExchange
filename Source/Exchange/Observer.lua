@@ -9,7 +9,8 @@
 --   obs = { version, at, season, inCombat,
 --     merchant = { open, isExchange, npcID, vendorName, inInstance, filterAll,
 --                  slotCount, offers = { [key] = Offer }, unsupported, readAt },
---     tiers = { [tierKey] = { tier, index, currency, room, packs, packedCrests } },
+--     tiers = { [tierKey] = { tier, index, currency, room, packs, packedCrests,
+--               packList = { { key, itemID, count, yield } } } },   (smallest first)
 --     packs = { [productKey] = count }, packSpace = { [productKey] = n },
 --     lastSeen = Store offers (for the away view) }
 --
@@ -25,6 +26,7 @@ local Merchant = CobysCrestExchange.Merchant
 local Currency = CobysCrestExchange.Currency
 local Inventory = CobysCrestExchange.Inventory
 local Store = CobysCrestExchange.Store
+local Seasons = CobysCrestExchange.Seasons
 local U = CobySuite_CobysCrestExchange.Utilities
 
 local S = {
@@ -71,20 +73,23 @@ local function ReadMerchant(season)
   if #list > 0 then Store.SaveOffers(list, m.npcID) end
 end
 
+-- Each tier's unopened packs of every kind (trades and reward packs), with
+-- each kind's own yield, since a reward pack holds more than a trade's
 local function ReadTiers(season, packs)
   local tiers = {}
   for index, tier in ipairs(season.tiers) do
     local currency = Currency.Read(tier.currencyID)
-    local packed, count = 0, 0
-    for _, product in ipairs(season.products) do
-      if product.to == tier.key then
-        local n = packs[product.key] or 0
-        count = count + n
-        if product.countsTowardEarningLimit ~= false then packed = packed + n * product.yield end
+    local packed, count, list = 0, 0, {}
+    for _, product in ipairs(Seasons.PacksInto(season, tier.key)) do
+      local n = packs[product.key] or 0
+      count = count + n
+      if product.countsTowardEarningLimit ~= false then packed = packed + n * product.yield end
+      if n > 0 then
+        list[#list + 1] = { key = product.key, itemID = product.itemID, count = n, yield = product.yield }
       end
     end
     tiers[tier.key] = { tier = tier, index = index, currency = currency, room = Currency.Room(currency),
-      packs = count, packedCrests = packed }
+      packs = count, packedCrests = packed, packList = list }
   end
   return tiers
 end
@@ -97,8 +102,9 @@ function Observer.Rebuild()
   if season then
     ReadMerchant(season)
     obs.packs = Inventory.Counts(season)
+    -- Bag space matters only for packs that are bought
     for _, product in ipairs(season.products) do
-      if product.itemID then obs.packSpace[product.key] = Inventory.PackSpace(product.itemID) end
+      if product.itemID and Seasons.IsTrade(product) then obs.packSpace[product.key] = Inventory.PackSpace(product.itemID) end
     end
     obs.tiers = ReadTiers(season, obs.packs)
     obs.lastSeen = Store.GetOffers()

@@ -215,7 +215,7 @@ local window = UI.CreateSettingsWindow({
         panel:Checkbox{
           key = Opt.USE_INTERACT_KEY, label = "Press the exchange button with my Interact key",
           tooltip = "Your Interact key presses the exchange window's button for you, one press per step. Never in combat.",
-          description = "Depending on the step, it buys, closes the vendor's window or opens the next pack.",
+          description = "Depending on the step, it buys the next step or opens the next pack.",
         }
         panel:Checkbox{
           key = Opt.HOLD_INTERACT_SETTING, label = "Turn on Enable Interact Key for the walk back", indent = 24,
@@ -227,10 +227,8 @@ local window = UI.CreateSettingsWindow({
         panel:Bullets{ items = {
           { title = "Buys the next packs", icon = CobysCrestExchange.ICON,
             lines = { "At Vaskarn, after you confirm the exchange." } },
-          { title = "Closes Vaskarn's window", atlas = "common-icon-redx",
-            lines = { "A pack used while a vendor is open would be sold." } },
           { title = "Opens the next pack", icon = "Interface\\Icons\\INV_Misc_Bag_08",
-            lines = { "One pack per press, once the vendor's window is closed." } },
+            lines = { "One pack per press, with Vaskarn's window open or closed." } },
           { title = "Talks to Vaskarn", icon = "Interface\\Icons\\INV_Misc_GroupNeedMore",
             lines = { "Only when a plan needs another visit to him." } },
         } }

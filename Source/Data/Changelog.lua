@@ -15,6 +15,26 @@ CobysCrestExchange.Data = CobysCrestExchange.Data or {}
 
 CobysCrestExchange.Data.Changelog = {
   {
+    version = "1.0.0",
+    title = "Out of beta",
+    date = "2026-10-06",
+    new = {
+      "Lifted caps: a tier the game stops capping keeps its color and shows what you earned this season",
+      "Reward packs: Warbound Mistcrest packs count in plans and the Open packs banner",
+      "{/ce} addons: every addon by Cobanyte, with CurseForge links",
+      "{/ce} reset windows: every window back to its default place and size",
+    },
+    changed = {
+      "Plans: count only packs that can open under the cap, and say what frees the rest",
+      "Opening: the exchange button opens packs with Vaskarn's window open",
+      "Plans that start by opening packs can be started anywhere",
+      "Short trade up: says when a pack in your bags would cover it",
+    },
+    fixed = {
+      "Plan page: the packs line no longer draws over a Spend box",
+    },
+  },
+  {
     version = "0.0.3",
     title = "Cap meters and MAX",
     date = "2026-10-06",

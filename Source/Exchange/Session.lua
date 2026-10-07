@@ -591,16 +591,20 @@ StartPlanStep = function()
 end
 
 local function RequestPlanReview(plan)
-  if S.state ~= ST.SELECTING or S.order or type(plan) ~= "table" or plan.status ~= "ok" or plan.planning then return end
+  if S.state ~= ST.SELECTING or S.order or type(plan) ~= "table" or plan.status ~= "ok" then return end
+  local Plan = CobysCrestExchange.Plan
+  local early = Plan.StartsWithOpen(plan)
+  if plan.planning and not early then return end
   -- A Store that can't save (a newer build's data) can't record an attempt
   -- before a purchase, so nothing is reviewed
   if Store.IsReadOnly() then return end
   local obs = Observer.Current()
   if obs.inCombat then return end
   -- A plan that only opens your own packs buys nothing: no vendor, no buying checks
-  if not CobysCrestExchange.Plan.OpenOnly(plan) then
+  if not Plan.OpenOnly(plan) then
     if S.advisorOnly or not Seasons.CAPABILITIES.buyFromAddon then return end
-    if not (obs.merchant and obs.merchant.isExchange) then return end
+    -- A plan that starts by opening your packs is reviewed anywhere (Task #296)
+    if not early and not (obs.merchant and obs.merchant.isExchange) then return end
   end
   S.frozenQuote, S.frozenPlan = nil, plan
   Enter(ST.REVIEWING)
@@ -930,8 +934,10 @@ end
 
 -- The one button's next action, from the state and what the game shows now:
 --   open   READY_TO_OPEN and a pack may open (the secure item use)
---   close  READY_TO_OPEN but a vendor's window is open: using a pack there
---          would sell it, so the press closes the window and opens nothing
+--   close  READY_TO_OPEN but a vendor's window is open and CAPABILITIES.
+--          openAtVendor is off (it is on, so this is not reached today): a
+--          pack used there would sell, so the press closes the window and
+--          opens nothing
 --   buy    NEXT_STEP at Vaskarn: the press buys the plan's next step ("Buy
 --          step N of M"); an open step reads "Start step N of M" anywhere
 --   talk   NEXT_STEP away from Vaskarn: nothing to press; the label says why

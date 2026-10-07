@@ -90,3 +90,26 @@ function Currency.PackFits(room, yield)
   if not room or room.raw == nil then return false end
   return room.raw >= yield
 end
+
+-- How many of a tier's unopened packs could open now, one after another,
+-- each whole: packList is the observed tier's { { key, count, yield } },
+-- smallest first, and each pack opened uses its yield of the raw room.
+-- Returns { packs, crests, fitPacks, fitCrests, byKey = { [key] = n } }
+-- (nothing fits an unknown room)
+function Currency.Openable(room, packList)
+  local r = { packs = 0, crests = 0, fitPacks = 0, fitCrests = 0, byKey = {} }
+  local left = room and room.raw
+  for _, p in ipairs(packList or {}) do
+    local n = 0
+    if left == INF then
+      n = p.count
+    elseif left ~= nil and p.yield > 0 then
+      n = math.min(p.count, math.floor(left / p.yield))
+      left = left - n * p.yield
+    end
+    r.packs, r.crests = r.packs + p.count, r.crests + p.count * p.yield
+    r.fitPacks, r.fitCrests = r.fitPacks + n, r.fitCrests + n * p.yield
+    r.byKey[p.key] = n
+  end
+  return r
+end

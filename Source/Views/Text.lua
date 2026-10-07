@@ -13,6 +13,7 @@ Views.Text = Text
 
 local U = CobySuite_CobysCrestExchange.Utilities
 local Seasons = CobysCrestExchange.Seasons
+local Currency = CobysCrestExchange.Currency
 
 local UNKNOWN = "?"
 
@@ -47,6 +48,19 @@ function Text.Count(n)
   if n == math.huge then return "no limit" end
   if BreakUpLargeNumbers then return BreakUpLargeNumbers(n) end
   return tostring(n)
+end
+
+-- The review's step cards: how many of `steps` show on `cards` cards, and
+-- whether Confirm may approve the plan. Every step must show: a plan with
+-- more steps than cards can't be confirmed (never part of it hidden).
+function Text.ReviewShown(steps, cards)
+  return math.min(steps, cards), steps <= cards
+end
+
+-- How far the review's card list scrolls: the shown cards' height past the
+-- height of the window onto them
+function Text.ScrollMost(shown, cardHeight, viewHeight)
+  return math.max(0, shown * cardHeight - viewHeight)
 end
 
 function Text.Plural(n, one, many)
@@ -242,7 +256,7 @@ end
 
 local OPEN_BLOCK = {
   combat = "Leave combat to open packs.",
-  merchant_open = "A pack used with a vendor's window open is sold, so the button closes the window first.",
+  merchant_open = "Close the vendor's window to open packs.",
   quota = "All packs from this exchange are open.",
   loot = "Collect the contents in the loot window first.",
   no_pack = "No pack from this exchange is in your bags.",
@@ -317,15 +331,29 @@ local function Rooms(t)
   return raw, math.max(0, raw - (t.packedCrests or 0))
 end
 
+-- The sign for "no cap" in a meter line (Task #297: the season cap lifts the
+-- week of October 20). It is the infinity sign, UTF-8 for U+221E; whether the
+-- game's fonts draw it is settled by looking (the Verify scene of the
+-- uncapped overview), and if they show a box this is the one line to change
+-- to a word such as "no cap".
+Text.UNCAPPED_MARK = "\226\136\158"
+
 -- The cap that binds now as a meter for the overview's tiles (Task #247):
 -- { frac, packed (the unopened crests' share, clipped to what's left), full,
 -- used, limit, label ("Season earned", "Week earned", "Held") }, or nil
--- with no cap or unreadable numbers
+-- with unreadable numbers. A tier with no cap at all (Task #297) is a meter
+-- with uncapped = true: the season's earned total over no limit, the bar
+-- whole and calm (a share of no limit means nothing, and a full bar at the
+-- capped tile's strength would read as MAX), no packs band, never full.
 function Text.CapMeter(t)
   if not (t and t.room and t.currency) then return nil end
   local room, c = t.room, t.currency
   local used, limit, label
-  if room.kind == "weekly" then
+  if room.kind == "none" then
+    if type(c.totalEarned) ~= "number" then return nil end
+    return { frac = 1, packed = 0, full = false, uncapped = true, used = c.totalEarned, limit = math.huge,
+      label = "Season earned" }
+  elseif room.kind == "weekly" then
     used, limit, label = c.earnedThisWeek, c.maxWeekly, "Week earned"
   elseif room.kind == "season" then
     limit = c.maxQuantity
@@ -343,7 +371,18 @@ end
 -- #269): "Season earned: 45/300", "Week earned: 120/300", "Held: 120/400". The
 -- cap being reached shows as the status column's check and MAX, not in this line
 function Text.MeterLine(m)
-  return m.label .. ": " .. Text.Count(m.used) .. "/" .. Text.Count(m.limit)
+  return m.label .. ": " .. Text.Count(m.used) .. "/" .. (m.uncapped and Text.UNCAPPED_MARK or Text.Count(m.limit))
+end
+
+-- The tooltip's lines for a season cap the game has lifted (Task #297): the
+-- earned total over the infinity sign, and a plain "No season cap now"; nothing
+-- when the earned total isn't readable. Calls add(label, value) then note(text).
+function Text.NoSeasonCapLines(t, add, note)
+  local c = t and t.currency
+  if not (c and c.ok and type(c.totalEarned) == "number") then return false end
+  add("Season earned", Text.Count(c.totalEarned) .. "/" .. Text.UNCAPPED_MARK)
+  note("No season cap now.")
+  return true
 end
 
 -- The word beside a capped tile's check, so a full row reads at a glance (Task
@@ -361,10 +400,16 @@ function Text.CanOpen(t, yield)
   return raw ~= nil and raw >= (yield or 1)
 end
 
--- How many of the tier's unopened packs fit the raw room now, of how many
+-- How many of the tier's unopened packs fit the raw room now, of how many:
+-- each kind of pack with its own yield when the tier lists them (a reward
+-- pack holds more than a trade's), else every pack at `yield`
 function Text.Openable(t, yield)
   local packs = t and t.packs or 0
   if not (t and t.room) or t.room.raw == nil then return 0, packs end
+  if t.packList then
+    local o = Currency.Openable(t.room, t.packList)
+    return o.fitPacks, o.packs
+  end
   if t.room.raw == math.huge then return packs, packs end
   return math.min(packs, math.floor(t.room.raw / (yield or 1))), packs
 end
@@ -440,13 +485,63 @@ function Text.CapShort(season, tierKey, t, yield)
     packed > 0 and " after your unopened packs" or "", Text.Count(yield))
 end
 
+-- "your Hero pack" / "your 2 Hero packs"
+local function YourPacks(season, tierKey, n)
+  if n == 1 then return "your " .. Text.Tier(season, tierKey) .. " pack" end
+  return string.format("your %s %s packs", Text.Count(n), Text.Tier(season, tierKey))
+end
+
+local function Capital(text)
+  return (text:gsub("^%l", string.upper))
+end
+
+-- What frees a tier's cap for packs that can't open now, as "until <this>"
+local function UntilWords(season, tierKey, t)
+  if not (t and t.room) or t.room.raw == nil then
+    return string.format("while the game isn't reporting %s's cap", Text.Tier(season, tierKey))
+  end
+  return "until " .. WaitFor(t)
+end
+
+-- A trade short of crests whose source tier holds unopened packs (Task #292):
+-- a trade never opens them, so say whether opening them first would pay for
+-- it (the plan does that) or the cap keeps them shut, and what frees it.
+-- nil when the source tier holds no packs.
+local function ShortWithPacks(season, q, obs, base)
+  local sp = q.sourcePacks
+  if not (sp and sp.packs > 0) then return nil end
+  local name = Text.Tier(season, q.sourceTier)
+  if sp.fitPacks > 0 then
+    local after = math.max(0, q.sourceBefore - (q.reserve or 0)) + sp.fitCrests
+    if after >= q.cost then
+      local plan = q.direction == "up" and (Seasons.TierIndex(season, q.destTier) or 0) >= 3
+      return string.format("Not enough %s until %s %s (+%s): %s", name, YourPacks(season, q.sourceTier, sp.fitPacks),
+        Text.Plural(sp.fitPacks, "opens", "open"), Text.Count(sp.fitCrests),
+        string.format(plan and "Plan from lower tiers opens %s first" or "open %s first from the first page",
+          Text.Plural(sp.fitPacks, "it", "them")))
+    end
+    return string.format("%s, even with %s from %s", base, Text.Count(sp.fitCrests), YourPacks(season, q.sourceTier, sp.fitPacks))
+  end
+  return string.format("%s. %s (+%s) %s %s", base, Capital(YourPacks(season, q.sourceTier, sp.packs)), Text.Count(sp.crests),
+    Text.Plural(sp.packs, "waits", "wait"), UntilWords(season, q.sourceTier, obs and obs.tiers[q.sourceTier]))
+end
+
+-- Packs a plan would use but the cap keeps shut (Plan.Waiting's entry w), in
+-- a sentence for the Get page: "Your Hero pack (20 Hero) can't open until the
+-- cap rises, so it isn't counted."
+function Text.WaitingLine(season, w, t)
+  return string.format("%s (%s) can't open %s, so %s counted.", Capital(YourPacks(season, w.tier, w.packs)),
+    Text.Crests(season, w.tier, w.crests), UntilWords(season, w.tier, t), w.packs == 1 and "it isn't" or "they aren't")
+end
+
 -- Why a trade can give nothing right now, short enough for its route's line.
 -- obs (optional) gives the cap's numbers.
 function Text.WhyNone(season, q, obs)
   if (q.limiter == "balance" or q.limiter == "reserve") and q.sourceBefore then
     local keep = q.limiter == "reserve" and (" after keeping " .. Text.Count(q.reserve)) or ""
-    return string.format("Not enough %s: you have %s, a pack costs %s%s", Text.Tier(season, q.sourceTier),
+    local base = string.format("Not enough %s: you have %s, a pack costs %s%s", Text.Tier(season, q.sourceTier),
       Text.Count(q.sourceBefore), Text.Count(q.cost), keep)
+    return ShortWithPacks(season, q, obs, base) or base
   end
   if q.limiter == "room" or q.limiter == "unknown_room" then
     return Text.CapShort(season, q.destTier, obs and obs.tiers[q.destTier], q.yield)

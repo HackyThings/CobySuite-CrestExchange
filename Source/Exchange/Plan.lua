@@ -23,7 +23,10 @@
 -- spend add to that tier's crests. Each becomes an open step,
 --   { kind = "open", key, itemID, to, packs, yield, cost = 0, spend = 0 }
 -- placed just before the trade that spends those crests (the target's last).
--- An open step needs no vendor and buys nothing.
+-- An open step needs no vendor and buys nothing. Every kind of pack counts,
+-- reward packs too (Task #292), smallest first, each with its own yield; a
+-- pack opens only into raw room (as Opener.MayOpen requires), so one the cap
+-- blocks is left out and the plan buys instead. Plan.Waiting names those.
 --
 -- Steps come out in the order they run: the lowest trade first. Session
 -- runs them one after another: buy, open every pack, then the next step.
@@ -56,11 +59,11 @@ local function UpInto(season, tierKey)
   end
 end
 
--- The unopened packs in the bags that give a tier's crests, by product
+-- The unopened packs in the bags that give a tier's crests, smallest first
 local function Held(obs, season, tierKey)
   local list = {}
-  for _, product in ipairs(season.products) do
-    local count = product.to == tierKey and obs.packs and obs.packs[product.key] or 0
+  for _, product in ipairs(Seasons.PacksInto(season, tierKey)) do
+    local count = obs.packs and obs.packs[product.key] or 0
     if count > 0 then
       local yield = product.yield or 10
       list[#list + 1] = { key = product.key, itemID = product.itemID, count = count, yield = yield }
@@ -69,16 +72,22 @@ local function Held(obs, season, tierKey)
   return list
 end
 
--- Open steps for `need` crests from held packs (fewest packs that cover it)
-local function OpenSteps(held, need, tierKey)
+-- Open steps for `need` crests from held packs: smallest first, each whole,
+-- and only as many as the tier's raw room takes now (unknown room: none).
+-- A pack can give more than is needed; the rest stays in the balance.
+local function OpenSteps(obs, held, need, tierKey)
+  local t = obs.tiers[tierKey]
+  local left = t and t.room and t.room.raw
   local steps, got = {}, 0
   for _, h in ipairs(held) do
-    if got >= need then break end
+    if got >= need or left == nil then break end
     local n = math.min(h.count, math.ceil((need - got) / h.yield))
+    if left ~= INF then n = math.min(n, math.floor(left / h.yield)) end
     if n > 0 then
       steps[#steps + 1] = { kind = "open", key = h.key, itemID = h.itemID, to = tierKey, packs = n, yield = h.yield,
         cost = 0, spend = 0 }
       got = got + n * h.yield
+      if left ~= INF then left = left - n * h.yield end
     end
   end
   return steps, got
@@ -101,17 +110,6 @@ local function Deficit(obs, tier, opts)
   return math.max(0, reserve - t.currency.quantity)
 end
 
--- Packs opened into a tier must fit its raw room, as the opener requires
--- (Opener.MayOpen); unknown room fits nothing
-local function OpensFit(obs, tierKey, crests)
-  if crests <= 0 then return true end
-  local t = obs.tiers[tierKey]
-  local raw = t and t.room and t.room.raw
-  if raw == nil then return false, "unknown_room" end
-  if raw ~= INF and crests > raw then return false, "room" end
-  return true
-end
-
 -- The chain for `packs` packs of the target: steps (lowest first) or nil and why
 function Plan.Chain(obs, season, targetIndex, packs, opts)
   local steps, planning = {}, false
@@ -121,12 +119,7 @@ function Plan.Chain(obs, season, targetIndex, packs, opts)
   local topProduct = UpInto(season, top.key)
   local topOffer = topProduct and Offer(obs, topProduct.key)
   local topYield = topOffer and topOffer.yieldPerUnit or (topProduct and topProduct.yield) or 10
-  local heldTop = Held(obs, season, top.key)
-  local opens = OpenSteps(heldTop, packs * topYield, top.key)
-  local fromHeld = 0
-  for _, o in ipairs(opens) do fromHeld = fromHeld + o.packs * o.yield end
-  local fits, why = OpensFit(obs, top.key, fromHeld)
-  if not fits then return nil, why, top.key end
+  local opens, fromHeld = OpenSteps(obs, Held(obs, season, top.key), packs * topYield, top.key)
   packs = math.max(0, packs - math.floor(fromHeld / topYield))
   if packs == 0 then return opens, nil, nil, false end
   for k = targetIndex, 2, -1 do
@@ -158,12 +151,8 @@ function Plan.Chain(obs, season, targetIndex, packs, opts)
       -- This tier's own packs make up what its balance lacks, opened first;
       -- what they give fills the tier's reserve before it can be spent
       local deficit = Deficit(obs, fromTier, opts)
-      local more, got = OpenSteps(Held(obs, season, fromTier.key), req - avail + deficit, fromTier.key)
-      if got > 0 then
-        local ok, whyNot = OpensFit(obs, fromTier.key, got)
-        if not ok then return nil, whyNot, fromTier.key end
-        for i = #more, 1, -1 do table.insert(steps, 1, more[i]) end
-      end
+      local more, got = OpenSteps(obs, Held(obs, season, fromTier.key), req - avail + deficit, fromTier.key)
+      for i = #more, 1, -1 do table.insert(steps, 1, more[i]) end
       avail = avail + math.max(0, got - deficit)
       short = math.max(0, deficit - got)
     elseif avail < req then
@@ -221,7 +210,8 @@ function Plan.Build(obs, targetKey, crests, opts)
   local yield = topOffer and topOffer.yieldPerUnit or (top and top.yield) or 10
   local maxPacks, limiter, limitTier = MaxPacks(obs, season, index, opts)
   local plan = { target = targetKey, yield = yield, maxPacks = maxPacks, maxCrests = maxPacks * yield,
-    limiter = limiter, limitTier = limitTier, crests = crests, steps = {}, opts = opts }
+    limiter = limiter, limitTier = limitTier, crests = crests, steps = {}, opts = opts,
+    waiting = Plan.Waiting(obs, targetKey, opts) }
   if crests == nil then plan.status = "empty"; return plan end
   if type(crests) ~= "number" or crests <= 0 or crests ~= math.floor(crests) then plan.status = "invalid"; return plan end
   if crests % yield ~= 0 then
@@ -238,12 +228,23 @@ function Plan.Build(obs, targetKey, crests, opts)
   end
   plan.status, plan.steps, plan.planning = "ok", steps, planning
   plan.before, plan.after, plan.spendBy = Totals(obs, season, steps)
+  -- What the target really gains: a pack opened whole can give more than asked
+  local b, a = plan.before[targetKey], plan.after[targetKey]
+  plan.gives = (b and a) and (a - b) or crests
   local parts = { targetKey, crests }
   for _, s in ipairs(steps) do
     parts[#parts + 1] = (s.kind == "open" and "open:" or "") .. s.key .. "x" .. s.packs .. "@" .. s.cost .. ":" .. tostring(s.signature)
   end
   plan.fingerprint = table.concat(parts, "|")
   return plan
+end
+
+-- The most steps a plan can have in a season: one trade into each tier above
+-- the lowest, and each pack type opened at most once (Chain opens a tier's
+-- held packs once per tier, and every pack opens into one tier). The review
+-- page builds this many step cards at load.
+function Plan.MaxSteps(season)
+  return math.max(0, #season.tiers - 1) + #season.products
 end
 
 -- Whether a plan only opens packs already in the bags (no trade, no buying):
@@ -254,6 +255,14 @@ function Plan.OpenOnly(plan)
     if step.kind ~= "open" then return false end
   end
   return true
+end
+
+-- Whether a plan's first step opens packs you have (Task #296): such a plan
+-- can be reviewed and started anywhere, since opening needs no vendor; its
+-- first purchase waits for Vaskarn as a "Talk to Vaskarn" step and is
+-- re-quoted live there, refusing on any change from the approved terms
+function Plan.StartsWithOpen(plan)
+  return type(plan) == "table" and type(plan.steps) == "table" and plan.steps[1] ~= nil and plan.steps[1].kind == "open"
 end
 
 -- The Get page's chosen route. routes = { { key, kind ("trade" or "plan"),
@@ -271,6 +280,28 @@ function Plan.ChooseRoute(routes, picked, hasAmount)
     if r.open and not r.down and (not best or (r.max or 0) > (best.max or 0)) then best = r end
   end
   return best
+end
+
+-- The packs a plan into targetKey would use but can't open now: the
+-- target's, and those of each tier it may spend (opts.spend), whose crests
+-- don't fit under the tier's cap. { { tier, packs, crests } }, lowest tier
+-- first; the window says what frees each (Text.WaitFor)
+function Plan.Waiting(obs, targetKey, opts)
+  local list = {}
+  local season = obs and obs.season
+  local index = season and Seasons.TierIndex(season, targetKey)
+  if not index then return list end
+  for i = 1, index do
+    local tier = season.tiers[i]
+    local t = obs.tiers[tier.key]
+    if t and (i == index or (opts and opts.spend and opts.spend[tier.key])) then
+      local o = Currency.Openable(t.room, t.packList)
+      if o.fitPacks < o.packs then
+        list[#list + 1] = { tier = tier.key, packs = o.packs - o.fitPacks, crests = o.crests - o.fitCrests }
+      end
+    end
+  end
+  return list
 end
 
 -- The tiers whose balance a plan into targetKey could spend: every tier below it

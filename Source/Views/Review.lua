@@ -27,7 +27,13 @@ local Store = CobysCrestExchange.Store
 local E = CobysCrestExchange.Events
 
 local ARM_DELAY = 0.6
-local CARDS = 12    -- a plan: up to 4 trades and 8 openings (a tier's trade-up and trade-down packs)
+local SUB_TEXT = "Nothing is bought until you press Confirm."
+local TOO_LONG_TEXT = "This plan has more steps than can be shown here, so it can't be confirmed."
+
+-- Step cards: enough for the longest plan any season can make (frames can't be
+-- made in combat, so they are built at load); a plan past them is refused
+local CARDS = 1
+for _, season in ipairs(Seasons.LIST) do CARDS = math.max(CARDS, CobysCrestExchange.Plan.MaxSteps(season)) end
 local VISIBLE = 4   -- cards shown at once; more scroll with the mouse wheel
 local CARD_H = 34
 local MORE_H = 16   -- the "scroll for more" line under them
@@ -140,7 +146,7 @@ local function Build(host)
   page.Title:SetPoint("TOPRIGHT", -4, -4)
   page.Sub = Line(host, U.Fonts.SMALL)
   page.Sub:SetPoint("TOPLEFT", page.Title, "BOTTOMLEFT", 0, -3)
-  page.Sub:SetText("Nothing is bought until you press Confirm.")
+  page.Sub:SetText(SUB_TEXT)
   -- The step cards scroll: every step can be read before Confirm
   page.Scroll = CreateFrame("ScrollFrame", nil, host)
   page.Scroll:SetPoint("TOPLEFT", host, "TOPLEFT", 0, -44)
@@ -151,7 +157,7 @@ local function Build(host)
   page.Scroll:SetScrollChild(page.List)
   page.Scroll:EnableMouseWheel(true)
   page.Scroll:SetScript("OnMouseWheel", function(self, delta)
-    local most = math.max(0, (page.shown or 0) * CARD_H - self:GetHeight())
+    local most = T.ScrollMost(page.shown or 0, CARD_H, self:GetHeight())
     self:SetVerticalScroll(math.min(most, math.max(0, self:GetVerticalScroll() - delta * CARD_H)))
   end)
   for i = 1, CARDS do
@@ -271,7 +277,8 @@ local function Entries(ctx, plan, quote)
     end
     -- Opening packs you have spends no balance
     if #list == 0 then list[1] = { label = "You spend", text = "nothing from your balances" } end
-    Add("You receive", plan.target, plan.crests, false)
+    -- What the target really gains: a held pack opens whole, so it can be more than asked
+    Add("You receive", plan.target, plan.gives or plan.crests, false)
   else
     Add("You spend", quote.sourceTier, quote.spend, true)
     Add("You receive", quote.destTier, quote.crests, false)
@@ -391,7 +398,7 @@ local function Arm(page, key)
   local mine = S.token
   page.Confirm:Disable()
   C_Timer.After(ARM_DELAY, function()
-    if mine == S.token and page.frame:IsShown() and not CobysCrestExchange.Session.SceneLocked() then
+    if mine == S.token and page.frame:IsShown() and not page.tooLong and not CobysCrestExchange.Session.SceneLocked() then
       page.Confirm:Enable()
     end
   end)
@@ -427,7 +434,10 @@ function page:Refresh(ctx)
       T.Plural(#steps, "step", "steps"))
     or string.format("Review: %s", T.Crests(ctx.season, quote.destTier, quote.crests)))
   FillCards(self, ctx, steps)
-  local count = math.min(#steps, CARDS)
+  -- Every step shows, or Confirm is refused: never part of a plan hidden
+  local count, showsAll = T.ReviewShown(#steps, #self.cards)
+  self.tooLong = not showsAll
+  self.Sub:SetText(showsAll and SUB_TEXT or TOO_LONG_TEXT)
   self.shown = count
   self.List:SetWidth(self.frame:GetWidth())
   local entries = Entries(ctx, plan, quote)
@@ -472,7 +482,7 @@ function page:Refresh(ctx)
     self.scrolledFor = self.current
     self.Scroll:SetVerticalScroll(0)
   else
-    local most = math.max(0, count * CARD_H - self.Scroll:GetHeight())
+    local most = T.ScrollMost(count, CARD_H, self.Scroll:GetHeight())
     self.Scroll:SetVerticalScroll(math.min(most, self.Scroll:GetVerticalScroll()))
   end
   local more = count > visible
@@ -493,7 +503,7 @@ end
 
 -- The Confirm press: approve exactly what was reviewed
 function Review.Accept()
-  if not page.current or not page.Confirm:IsEnabled() then return end
+  if not page.current or page.tooLong or not page.Confirm:IsEnabled() then return end
   page.Confirm:Disable()
   S.armedFor = nil
   local autoOpen = Seasons.CAPABILITIES.autoOpenAfterClose and Store.GetAutoOpen()

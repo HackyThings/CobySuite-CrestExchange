@@ -22,7 +22,8 @@
 --                      timer after a press")
 --   openAtVendor       using a pack by item ID opens it, not sells it, while
 --                      a merchant window is open ("Open one pack at Vaskarn:
---                      opens or sells?", the sell test)
+--                      opens or sells?", the sell test); true since 2026-10-06,
+--                      the player's own /use opens a pack with the window open
 --   autoOpenAfterClose packs open from plain code after the vendor closes
 --                      ("Open one pack from a timer, no press")
 --   capRuleVerified    how packs meet the destination cap is known (the two
@@ -38,7 +39,7 @@ CobysCrestExchange.Seasons = Seasons
 Seasons.CAPABILITIES = {
   buyFromAddon       = true,
   chunkWithoutPress  = true,
-  openAtVendor       = false,
+  openAtVendor       = true,
   autoOpenAfterClose = false,
   capRuleVerified    = false,
 }
@@ -81,6 +82,13 @@ Seasons.LIST = {
       { key = "down-veteran",    itemID = 269859, kind = "down", from = "champion", to = "veteran",    yield = 10, verification = "verified" },
       { key = "down-champion",   itemID = 269857, kind = "down", from = "hero",     to = "champion",   yield = 10, verification = "verified" },
       { key = "down-hero",       itemID = 269858, kind = "down", from = "myth",     to = "hero",       yield = 10, verification = "verified" },
+      -- kind "reward": a pack Vaskarn doesn't sell (a weekly quest's choice of
+      -- reward, bound to the warband), only opened. Each holds more than a
+      -- trade's pack. Item IDs and contents from the game's item data
+      -- (build 69933): Collect 60 Veteran, 40 Champion, 20 Hero Mistcrests
+      { key = "reward-veteran",  itemID = 280737, kind = "reward", to = "veteran",  yield = 60, verification = "verified" },
+      { key = "reward-champion", itemID = 280734, kind = "reward", to = "champion", yield = 40, verification = "verified" },
+      { key = "reward-hero",     itemID = 280732, kind = "reward", to = "hero",     yield = 20, verification = "verified" },
     },
     -- Trading up INTO a tier needs the "of the Mist" achievement of the tier
     -- below: every gear slot's high watermark at that track's top item level.
@@ -141,13 +149,35 @@ function Seasons.ProductByItem(season, itemID)
   end
 end
 
+-- A trade Vaskarn sells (up or down), as opposed to a reward pack only opened
+function Seasons.IsTrade(product)
+  return product.kind == "up" or product.kind == "down"
+end
+
 -- The trades that end in tierKey: usually one up from below, one down from above
 function Seasons.TradesInto(season, tierKey)
   local list = {}
   for _, product in ipairs(season.products) do
-    if product.to == tierKey then list[#list + 1] = product end
+    if product.to == tierKey and Seasons.IsTrade(product) then list[#list + 1] = product end
   end
   table.sort(list, function(a, b) return a.kind == "up" and b.kind ~= "up" end)
+  return list
+end
+
+-- Every pack that opens into tierKey, trades and reward packs, smallest
+-- first (the order packs are opened in, so the fewest crests go over what
+-- is needed); ties keep the table's order, so a trade's pack comes first
+function Seasons.PacksInto(season, tierKey)
+  local list = {}
+  for index, product in ipairs(season.products) do
+    if product.to == tierKey then list[#list + 1] = { product = product, index = index } end
+  end
+  table.sort(list, function(a, b)
+    local ya, yb = a.product.yield or 10, b.product.yield or 10
+    if ya ~= yb then return ya < yb end
+    return a.index < b.index
+  end)
+  for i, entry in ipairs(list) do list[i] = entry.product end
   return list
 end
 

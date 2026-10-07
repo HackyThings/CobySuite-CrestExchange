@@ -39,7 +39,11 @@ local function TileTooltip(tip, tierKey)
   tip:AddDoubleLine("Balance", T.Count(t.currency.ok and t.currency.quantity or nil), 0.8, 0.8, 0.8, 1, 1, 1)
   local room = t.room
   if room.kind == "none" then
-    tip:AddLine("No cap on this tier right now.", 0.8, 0.8, 0.8, true)
+    -- Task #297: a lifted season cap reads as the earned total over the infinity sign
+    if not T.NoSeasonCapLines(t, function(label, value) tip:AddDoubleLine(label, value, 0.8, 0.8, 0.8, 1, 1, 1) end,
+        function(text) tip:AddLine(text, 0.8, 0.8, 0.8, true) end) then
+      tip:AddLine("No cap on this tier right now.", 0.8, 0.8, 0.8, true)
+    end
   elseif room.kind == "unknown" then
     tip:AddLine("The game isn't reporting this tier's cap.", U.Colors.CAUTION_ORANGE[1], U.Colors.CAUTION_ORANGE[2], U.Colors.CAUTION_ORANGE[3], true)
   else
@@ -49,6 +53,11 @@ local function TileTooltip(tip, tierKey)
       local seasonUsed = c.useTotalEarned and c.totalEarned or c.quantity
       tip:AddDoubleLine(c.useTotalEarned and "Season earned" or "Held",
         T.Count(seasonUsed) .. "/" .. T.Count(c.maxQuantity), 0.8, 0.8, 0.8, 1, 1, 1)
+    end
+    if room.season == nil then
+      -- Only the weekly cap is left: the season's is lifted
+      T.NoSeasonCapLines(t, function(label, value) tip:AddDoubleLine(label, value, 0.8, 0.8, 0.8, 1, 1, 1) end,
+        function(text) tip:AddLine(text, 0.8, 0.8, 0.8, true) end)
     end
     if room.weekly ~= nil then
       tip:AddDoubleLine("Earned this week", T.Count(c.earnedThisWeek) .. "/" .. T.Count(c.maxWeekly), 0.8, 0.8, 0.8, 1, 1, 1)
@@ -192,14 +201,27 @@ local function RefreshBanner(page, ctx)
   local banner = page.banner
   banner.productKey = nil
   if not ctx.view.order and not ctx.view.plan then
+    -- A kind of pack that can open now comes first (a reward pack the cap
+    -- keeps shut would only refuse); else the first one held
+    local chosen, fallback
     for _, product in ipairs(ctx.season.products) do
       local n = ctx.obs.packs[product.key] or 0
-      if n > 0 and not banner.productKey then
-        banner.productKey = product.key
-        banner.Icon:SetTexture(product.itemID and CobysCrestExchange.Seams.Call("ItemIcon", product.itemID) or 134400)
-        banner.Text:SetText(string.format("%s of %s waiting (%s crests)",
-          T.Packs(n), T.Tier(ctx.season, product.to), T.Count(n * product.yield)))
+      local t = ctx.obs.tiers[product.to]
+      if n > 0 and t then
+        if (Currency.Openable(t.room, t.packList).byKey[product.key] or 0) > 0 then
+          chosen = chosen or product
+        else
+          fallback = fallback or product
+        end
       end
+    end
+    local product = chosen or fallback
+    if product then
+      local n = ctx.obs.packs[product.key]
+      banner.productKey = product.key
+      banner.Icon:SetTexture(product.itemID and CobysCrestExchange.Seams.Call("ItemIcon", product.itemID) or 134400)
+      banner.Text:SetText(string.format("%s of %s waiting (%s crests)",
+        T.Packs(n), T.Tier(ctx.season, product.to), T.Count(n * product.yield)))
     end
   end
   banner:SetShown(banner.productKey ~= nil)

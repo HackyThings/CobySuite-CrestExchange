@@ -9,8 +9,9 @@ A better crest exchange at Vaskarn in Silvermoon (WoW Midnight 12.1). Choose how
 ## Features
 
 - Every way of getting your crests, priced for the amount you choose.
-- Plans across your lower tiers, with crest packs already in your bags counted.
-- Your balance and a cap meter per tier: how full each cap is, the crests waiting in unopened packs, and a MAX mark at a cap.
+- Plans across your lower tiers, with the crest packs already in your bags counted, Warbound reward packs of Mistcrests included.
+- Packs you already hold open from the first page, wherever you are; a plan that starts by opening them can be started anywhere.
+- Your balance and a cap meter per tier: how full each cap is, the crests waiting in unopened packs, and a MAX mark at a cap. When the game lifts a cap, the tier keeps its color and shows what you earned this season over an infinity sign.
 - A reserve per tier that Max and every exchange leave alone.
 - Locked trades explained, down to the gear slot.
 - Your Interact key can run the whole exchange.
@@ -20,7 +21,7 @@ A better crest exchange at Vaskarn in Silvermoon (WoW Midnight 12.1). Choose how
 1. Talk to Vaskarn and click the tier you want more of.
 2. Type an amount, or press Max, then pick a route.
 3. Press Review, check the cost, then Confirm.
-4. Press the exchange button: it closes Vaskarn's window and opens each pack. When a plan needs him again, talk to him and keep going.
+4. Press the exchange button: it opens each pack, with Vaskarn's window open or closed. When a plan needs him again, talk to him and keep going.
 
 Stop, combat, or closing Vaskarn's window pauses the buying; nothing more is bought until you confirm again.
 
@@ -34,10 +35,12 @@ Stop, combat, or closing Vaskarn's window pauses the buying; nothing more is bou
 
 ```
 /ce                   Open or close the exchange window (also /ce show)
-/ce settings          Open or close the settings window (also config, options)
-/ce guide             Open or close the feature guide (also tutorial)
-/ce changelog         Open or close the changelog: what changed in each version (also change, whatsnew, news)
+/ce settings          Open or close the settings window (also /ce config, /ce options)
+/ce guide             Open or close the feature guide (also /ce tutorial)
+/ce changelog         Open or close the changelog: what changed in each version (also /ce whatsnew, /ce news, /ce change)
+/ce addons            Every addon by Cobanyte, with CurseForge links and pictures (also /ce other, /ce more)
 /ce debug             Open or close the debug log window
+/ce reset windows     Put every window back to its default place and size
 /ce dump              Show a report of what the addon sees, selected for Ctrl+C (for bug reports)
 /ce version           Print the addon version
 /ce help              Show this help
@@ -47,7 +50,7 @@ Stop, combat, or closing Vaskarn's window pauses the buying; nothing more is bou
 
 ## License
 
-GPL-2.0. See [LICENSE](LICENSE).
+Copyright (C) 2026 Cobanyte. Released under the GNU General Public License, version 2 (see [LICENSE](LICENSE)).
 
 ## Issues / Feedback
 
