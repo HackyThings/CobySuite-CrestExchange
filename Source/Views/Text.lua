@@ -131,7 +131,7 @@ function Text.Slot(name) return SLOT_LABELS[name] or name end
 local NOTICE = {
   changed = "Something changed. Review the exchange again.",
   stopping = "Stopping after the purchase in progress.",
-  auto_stopped = "Automatic opening stopped. Press Open to continue.",
+  auto_stopped = "Opening stopped. Press Open Next Pack to continue.",
   open_no_effect = "That press didn't open a pack.",
   checked = "Checked.",
   still_unclear = "Checked again: the purchase is still unconfirmed.",
@@ -172,9 +172,9 @@ function Text.Pause(reason) return PAUSE[reason] or reason end
 local function ButtonName(name) return U.WrapColor(U.Colors.TEXT_GOLD, name) end
 
 local BUTTON_LINES = {
-  ButtonName("Check again") .. ": looks once more; it never buys anything.",
-  ButtonName("Discard order") .. ": ends this exchange; what you have stays yours.",
-  ButtonName("Copy details") .. ": a report, selected for Ctrl+C, to share if something looks wrong.",
+  ButtonName("Check Again") .. ": looks once more; it never buys anything.",
+  ButtonName("Discard Order") .. ": ends this exchange; what you have stays yours.",
+  ButtonName("Copy Details") .. ": a report, selected for Ctrl+C, to share if something looks wrong.",
 }
 
 local function WithButtons(lines)
@@ -187,7 +187,7 @@ end
 -- live }; packsSeen and spentSeen are the changes since the purchase was sent
 -- (either may be negative: something else changed them), nil when unread
 local CHECK_LEAD = {
-  -- a restored attempt stays uncertain until Check again, even when it matches
+  -- a restored attempt stays uncertain until Check Again, even when it matches
   complete = "Your crest and pack changes match what this purchase should change.",
   none = "Your crests and packs haven't changed since the purchase was sent.",
   overshoot = "Your crests or packs changed by more than the purchase explains; something else may have changed them at the same moment.",
@@ -234,7 +234,7 @@ function Text.UncertainMessage(check, reason, notice)
   lines[#lines + 1] = lead
   lines[#lines + 1] = check.live
     and "It may still have gone through. Nothing more is bought until it's confirmed, and this page moves on by itself when it is."
-    or "It may still have gone through. Nothing more is bought until it's confirmed: compare the rows above with your bags, then press Check again."
+    or "It may still have gone through. Nothing more is bought until it's confirmed: compare the rows above with your bags, then press Check Again."
   return WithButtons(lines)
 end
 
@@ -242,15 +242,15 @@ function Text.UncertainOpenMessage(notice)
   local lines = {}
   if notice then lines[#lines + 1] = notice end
   lines[#lines + 1] = "You logged out or reloaded while a pack was opening, so it isn't known whether it opened."
-  lines[#lines + 1] = "Check again looks: a pack gone from your bags counts as opened; if none is gone, you go back to opening."
+  lines[#lines + 1] = "Check Again looks: a pack gone from your bags counts as opened; if none is gone, you go back to opening."
   return WithButtons(lines)
 end
 
--- An uncertain purchase with nothing left to compare (Check again pauses it)
+-- An uncertain purchase with nothing left to compare (Check Again pauses it)
 function Text.UncertainPlainMessage(notice)
   local lines = {}
   if notice then lines[#lines + 1] = notice end
-  lines[#lines + 1] = "The last purchase can't be compared any more. Press Check again to move on."
+  lines[#lines + 1] = "The last purchase can't be compared any more. Press Check Again to move on."
   return WithButtons(lines)
 end
 
@@ -272,7 +272,7 @@ function Text.OpenBlock(reason) return OPEN_BLOCK[reason] or "" end
 local TAB_STATUS = {
   BUYING = "Buying packs.", WAITING_FOR_PURCHASE = "Buying packs.",
   READY_TO_OPEN = "Packs ready to open.", WAITING_FOR_OPEN = "Opening a pack.", WAITING_FOR_LOOT = "Opening a pack.",
-  PAUSED = "An exchange is waiting to be finished.", UNCERTAIN = "An exchange needs checking. Open the window and press Check again.",
+  PAUSED = "An exchange is waiting to be finished.", UNCERTAIN = "An exchange needs checking. Open the window and press Check Again.",
   REVIEWING = "Waiting for your confirmation.",
 }
 TAB_STATUS.NEXT_STEP = "The next step of your plan is ready."
@@ -606,6 +606,7 @@ function Text.StepBlocked(reason)
     unavailable = "Vaskarn isn't offering the next step's trade right now.",
     bags = "Free some bag space for the next step's packs.",
     stock = "Vaskarn is out of the next step's packs.",
+    read_only = "Your saved exchange data is from a newer version of the addon and can't be updated, so nothing is bought.",
   }
   return map[reason] or "The next step can't start right now."
 end

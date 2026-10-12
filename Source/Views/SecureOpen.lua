@@ -14,15 +14,16 @@
 --
 -- It is the one button that runs an exchange or a plan, always in the same
 -- place, doing what Session.NextAction() says comes next:
---   Open next pack             the secure item use (the only mode that uses an item)
---   Close the vendor's window  only while CAPABILITIES.openAtVendor is off
---                              (it is on since 2026-10-06, the player's own
---                              /use opens a pack with a vendor open); this press closes it (HideUIPanel, the panel
---                              manager's secure path) and opens nothing; the
---                              next press opens
---   Buy step N of M            a plan's next step, at Vaskarn; it ignores
+--   Open Next Pack             the secure item use (the only mode that uses an item)
+--   Close the Vendor's Window  only while CAPABILITIES.openAtVendor is off
+--                              (it is on since 2026-10-06: the player's own
+--                              /use opens a pack with a vendor open); this
+--                              press closes the window (HideUIPanel, the
+--                              panel manager's secure path) and opens
+--                              nothing; the next press opens
+--   Buy Step N of M            a plan's next step, at Vaskarn; it ignores
 --                              presses for half a second after it appears
---                              (an open step reads Start step N of M and
+--                              (an open step reads Start Step N of M and
 --                              needs no vendor)
 --   Talk to Vaskarn ...        disabled: only the player can open his window
 -- For every mode but Open, PreClick blanks the click's item action (type "")
@@ -52,7 +53,7 @@ end
 function SecureOpen.Create(parent, point)
   local button = UI.CreateButton(parent, {
     name = "CobysCrestExchangeOpenButton",
-    text = "Open next pack",
+    text = "Open Next Pack",
     size = { 220, 28 },
     point = point,
     template = "UIPanelButtonTemplate, InsecureActionButtonTemplate",
@@ -106,10 +107,10 @@ function SecureOpen.Create(parent, point)
   return button
 end
 
-local BUY_GUARD = 0.5   -- Buy step ignores presses this long after it appears
+local BUY_GUARD = 0.5   -- Buy Step ignores presses this long after it appears
 
 -- The label with the Interact key's name: the key that presses the button
--- ("Open next pack  (F)") or the one that talks to Vaskarn
+-- ("Open Next Pack  (F)") or the one that talks to Vaskarn
 local function KeyLabel(text, mode)
   local key = Views.InteractKey
   if not key then return text end
@@ -159,7 +160,7 @@ local function Paint(view)
     Note(shown, action.enabled and not guarded, action.reason or (guarded and "just appeared" or nil))
     return
   end
-  button:SetText(KeyLabel("Open next pack", "open"))
+  button:SetText(KeyLabel("Open Next Pack", "open"))
   -- Greyed under a Verify scene's lock too: view.canOpen is the sample's own
   -- state (the page's text shows it), not whether this button may act
   -- (in game 2026-10-01: the Window suite's scene-lock test found it enabled)
@@ -170,7 +171,7 @@ local function Paint(view)
     why = scene and "scene" or state
     if state == "READY_TO_OPEN" and not scene then why = select(2, CobysCrestExchange.Session.MayOpen()) or state end
   end
-  Note("Open next pack", enabled, why)
+  Note("Open Next Pack", enabled, why)
 end
 
 -- Called from the Progress page's refresh: the button, then what the Interact key does

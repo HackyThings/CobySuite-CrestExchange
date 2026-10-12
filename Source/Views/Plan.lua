@@ -3,8 +3,8 @@
 --
 -- Type how many crests of the target to receive (or Max). Once you press
 -- Enter or leave the box, the ladder below previews the whole plan: each
--- tier's balance before and
--- after, the target glowing, and each step's trade with dots flowing up it
+-- tier's balance before and after, the target glowing, and each step's trade
+-- with dots flowing up it
 -- ("Step 1: 6 packs, 180 Champion to 60 Hero"). Each tier below the target
 -- has a Spend checkbox: checked, the plan may spend the crests you have
 -- there; unchecked, crests made there along the way are used and your
@@ -94,7 +94,7 @@ local function Build(host)
       Views.Get.state.crests, Views.Get.state.route = S.crests, "plan"
       Window.Go("source")
     end })
-  page.Review = UI.CreateButton(host, { text = "Review plan", size = { 150, 24 }, point = { "BOTTOMRIGHT", host, "BOTTOMRIGHT", 0, 4 },
+  page.Review = UI.CreateButton(host, { text = "Review Plan", size = { 150, 24 }, point = { "BOTTOMRIGHT", host, "BOTTOMRIGHT", 0, 4 },
     onClick = function()
       if page.plan and page.plan.status == "ok" then CobysCrestExchange.EventBus:Fire(E.PlanReviewRequested, page.plan) end
     end })
@@ -150,10 +150,14 @@ local function SummaryText(ctx, plan)
       presses = presses + s.packs
       if s.kind ~= "open" then buys = buys + 1 end
     end
-    lines[#lines + 1] = string.format("%s in %d %s. You'll press Open once per pack (%d in all); the panel shows each next press.",
+    lines[#lines + 1] = string.format("%s in %d %s. Press Open Next Pack once per pack (%d in all).",
       T.Crests(ctx.season, S.target, S.crests), steps, T.Plural(steps, "step", "steps"), presses)
-    -- Each purchase after the first needs Vaskarn's window again (Task #236)
-    if buys > 1 then lines[#lines + 1] = "Talk to Vaskarn again before each purchase after the first." end
+    -- Packs open with Vaskarn's window open, so it stays open between purchases;
+    -- were that off, each purchase after the first would need him again (Task #236)
+    if buys > 1 then
+      lines[#lines + 1] = Seasons.CAPABILITIES.openAtVendor and "Keep Vaskarn's window open for each purchase."
+        or "Talk to Vaskarn again before each purchase after the first."
+    end
     local over = {}
     for key, after in pairs(plan.after or {}) do
       local before = plan.before[key]

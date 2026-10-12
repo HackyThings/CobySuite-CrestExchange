@@ -12,7 +12,7 @@
 --
 -- Protections: Confirm sits in the middle of the page, away from where
 -- Review was pressed, and only arms a moment after the page appears, so a
--- double press can't accept by accident. Go back (or closing the window)
+-- double press can't accept by accident. Go Back (or closing the window)
 -- cancels. Confirm sends PurchaseApproved with the reviewed fingerprint;
 -- the session refuses it if anything changed since.
 -------------------------------------------------------------------------------
@@ -39,7 +39,7 @@ local CARD_H = 34
 local MORE_H = 16   -- the "scroll for more" line under them
 local BANNER_H = 26
 local CONFIRM_H = 28
-local CONFIRM_MIN = 34   -- Confirm never sits lower than this, clear of Go back
+local CONFIRM_MIN = 34   -- Confirm never sits lower than this, clear of Go Back
 local GAP = 10
 local ROWS = 6      -- spend rows (a plan spends up to four tiers) and the receive row
 local ROW_H = 20
@@ -207,7 +207,7 @@ local function Build(host)
   page.Confirm = UI.CreateButton(host, { text = "Confirm", size = { 220, CONFIRM_H },
     point = { "BOTTOM", host, "BOTTOM", 0, CONFIRM_MIN },
     onClick = function() Views.Review.Accept() end })
-  page.Back = UI.CreateButton(host, { text = "Go back", size = { 90, 22 }, point = { "BOTTOMLEFT", host, "BOTTOMLEFT", 0, 4 },
+  page.Back = UI.CreateButton(host, { text = "Go Back", size = { 90, 22 }, point = { "BOTTOMLEFT", host, "BOTTOMLEFT", 0, 4 },
     onClick = function() CobysCrestExchange.EventBus:Fire(E.SessionCommand, "cancel_review") end })
   -- Leaving the page disarms Confirm, so the next review waits again
   host:HookScript("OnHide", function() S.armedFor = nil; S.token = S.token + 1 end)
@@ -369,7 +369,7 @@ local function FitCards(page, count)
 end
 
 -- The refund banner and Confirm sit GAP below the text, or as low
--- as Go back allows when the text is long. Confirm stays centered, away from
+-- as Go Back allows when the text is long. Confirm stays centered, away from
 -- the bottom-right corner where Review was pressed.
 local function PlaceBanner(page, count)
   local width = page.frame:GetWidth() - 8
@@ -496,7 +496,7 @@ function page:Refresh(ctx)
   end
   self.Rows:SetPoint("RIGHT", self.frame, "RIGHT", -4, 0)
   PlaceBanner(self, #steps)
-  local spendText = plan and "Confirm: start the plan" or ("Confirm: spend " .. T.Count(quote.spend) .. " " .. T.TierLabel(ctx.season, quote.sourceTier))
+  local spendText = plan and "Confirm: Start the Plan" or ("Confirm: Spend " .. T.Count(quote.spend) .. " " .. T.TierLabel(ctx.season, quote.sourceTier))
   self.Confirm:SetText(spendText)
   Arm(self, self.current)
 end

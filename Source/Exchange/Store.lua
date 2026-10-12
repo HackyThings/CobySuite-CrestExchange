@@ -97,6 +97,8 @@ end
 local function CleanSeasonBucket(bucket)
   if type(bucket) ~= "table" then bucket = {} end
   local clean = {
+    -- Kept so the season limit drops the oldest bucket, not any (Task #312)
+    seenAt = Whole(bucket.seenAt) and bucket.seenAt or 0,
     reserves = CleanReserves(bucket.reserves),
     autoOpen = bucket.autoOpen == true,
     offers = CleanOffers(bucket.offers),
@@ -299,6 +301,9 @@ function Store.SavePlan(plan)
 end
 
 function Store.GetPlan()
+  -- As with an order: a newer build's plan is never handed out, since nothing
+  -- it buys could be saved (Task #312)
+  if S.readOnly then return nil end
   local bucket = Store.Bucket()
   return bucket and Store.ValidatePlan(bucket.plan) or nil
 end

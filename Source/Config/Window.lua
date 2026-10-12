@@ -7,14 +7,15 @@
 --   Exchange      When visiting Vaskarn (three picture tiles: the window, its
 --                 small tab, or nothing) and Keep at least (a button to the
 --                 exchange window's Before you spend page, where reserves
---                 are edited; they are per character, so not settings)
+--                 are edited; they are per character, so not settings), then
+--                 the suite's version check (its Updates section)
 --   Interact key  a card with the player's own Interact key and whether it
 --                 can press the button now, the two Interact settings, and
 --                 what the key does depending on the step
 --   Window        Where it docks (four picture tiles) and Reset window
 --                 position (acts at once)
--- Staged edits that Apply writes through Config.Set, Cancel, Defaults, and a
--- Guide footer button. Built at load, so opening it never creates frames in
+-- Staged edits that Apply writes through Config.Set, Undo Edits, Defaults, and
+-- a Guide footer button. Built at load, so opening it never creates frames in
 -- combat; the controls are painted from config on every show, a
 -- ConfigChanged event repaints an open window, and the key card repaints on
 -- binding and combat changes. The addon is also listed under Options >
@@ -172,7 +173,7 @@ local window = UI.CreateSettingsWindow({
         }
         panel:Section("Keep at least", { atlas = "common-icon-checkmark" })
         panel:Button{
-          text = "Set Keep at least...", width = 190, atlas = "common-icon-checkmark",
+          text = "Set Keep at Least...", width = 190, atlas = "common-icon-checkmark",
           tooltip = "Open the exchange window on Before you spend.",
           -- A review or an exchange under way holds the window on its own
           -- page; a finished exchange's receipt is closed first
@@ -194,6 +195,7 @@ local window = UI.CreateSettingsWindow({
             Window.Go("before")
           end,
         }
+        CobySuite_CobysCrestExchange.VersionCheck.AddSettingsRows(panel, Opt.VERSION_CHECK)
       end,
     },
     {
@@ -249,7 +251,7 @@ local window = UI.CreateSettingsWindow({
           description = "When the side you prefer has no room, the window uses the other side, then its saved position. The small tab sits in the same place.",
         }
         panel:Button{
-          text = "Reset window position", width = 180,
+          text = "Reset Window Position", width = 180,
           enabledWhen = function() return Views().Dock ~= nil and Views().Dock.HasSavedSpot() end,
           description = "Takes effect immediately. Away from Vaskarn the window goes back to its starting spot, just above the middle of your screen.",
           onClick = function(w)
@@ -262,7 +264,7 @@ local window = UI.CreateSettingsWindow({
   },
 })
 
--- The key card follows the player's bindings and combat while it shows,
+-- The key card follows the player's bindings and combat while it shows
 local watcher = CreateFrame("Frame")
 for _, event in ipairs({ "UPDATE_BINDINGS", "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED" }) do
   watcher:RegisterEvent(event)
@@ -270,7 +272,7 @@ end
 watcher:SetScript("OnEvent", function()
   if window:IsShown() then window:RefreshState() end
 end)
--- and the crests-to-keep button follows the exchange's state
+-- and the Keep at least button follows the exchange's state
 local sessionListener = {}
 function sessionListener:ReceiveEvent()
   if window:IsShown() then window:RefreshState() end

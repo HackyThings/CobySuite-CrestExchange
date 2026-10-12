@@ -1,14 +1,14 @@
 -------------------------------------------------------------------------------
 -- CobysCrestExchange Views.Amount: resuming a stopped exchange
 --
--- Reached only from Review remaining on a paused order: "Receive [ 20 ]
+-- Reached only from Review Remaining on a paused order: "Receive [ 20 ]
 -- more Champion crests", filled in with what is left and capped by it.
 -- Minus and plus step by one pack; Max fills in everything allowed right
 -- now, and its tooltip names what limits it. An amount that isn't a whole
 -- number of packs offers the two pack amounts around it as buttons (never
 -- rounded silently). The ladder previews the single trade: both balances
 -- before and after all packs open, and the room left; the reserve sits under
--- it. Enter only commits the number; Review exchange opens the Review page,
+-- it. Enter only commits the number; Review Exchange opens the Review page,
 -- where buying is confirmed.
 -------------------------------------------------------------------------------
 
@@ -168,7 +168,7 @@ local function Build(host)
         Window.Go("source")
       end
     end })
-  page.Review = UI.CreateButton(host, { text = "Review exchange", size = { 150, 24 },
+  page.Review = UI.CreateButton(host, { text = "Review Exchange", size = { 150, 24 },
     point = { "BOTTOMRIGHT", host, "BOTTOMRIGHT", 0, 4 },
     onClick = function() if page.q and page.q.status == "ok" then Bus():Fire(E.ReviewRequested, page.q) end end })
   page.Planning = host:CreateFontString(nil, "OVERLAY", U.Fonts.SMALL)
@@ -186,7 +186,7 @@ local function ProblemLines(page, q, ctx)
     elseif p.kind == "unknown_room" then lines[#lines + 1] = T.Limiter("unknown_room")
     elseif p.kind == "balance" then lines[#lines + 1] = string.format("Not enough %s: one pack costs %s.",
       T.Tier(page.season, q.sourceTier), T.Count(p.need))
-    elseif p.kind == "existing_packs" then lines[#lines + 1] = string.format("You already have %s of these crests unopened; they are counted in the room.",
+    elseif p.kind == "existing_packs" then lines[#lines + 1] = string.format("You already have %s unopened; their crests count against the room.",
       T.Packs(p.packs))
     elseif p.kind == "combat" then lines[#lines + 1] = T.Pause("combat") end
   end
@@ -218,8 +218,13 @@ local function RefreshControls(page, q, ctx)
     r.Up:SetShown(r.up ~= nil); r.Up:SetText(r.up and T.Count(r.up) or "")
   end
   local src = Seasons.Tier(page.season, q.sourceTier)
-  if not page.Reserve:HasFocus() then page.Reserve:SetCommittedValue(src and Store.GetReserve(src.currencyID) or 0) end
-  page.ReserveUnit:SetText(T.Tier(page.season, q.sourceTier))
+  local own = src and Store.GetReserve(src.currencyID) or 0
+  if not page.Reserve:HasFocus() then page.Reserve:SetCommittedValue(own) end
+  -- A resumed plan step keeps its plan's floor: shown here, never saved as the
+  -- player's own reserve (Task #312)
+  local floor = (q.reserve or 0) > own and q.reserve or nil
+  page.ReserveUnit:SetText(T.Tier(page.season, q.sourceTier)
+    .. (floor and string.format(" (plan keeps %s)", T.Count(floor)) or ""))
   page.AutoOpen:SetShown(Seasons.CAPABILITIES.autoOpenAfterClose == true and not q.planning)
   page.AutoOpen:SetChecked(Store.GetAutoOpen())
   local ok = q.status == "ok" and not q.planning and not ctx.obs.inCombat and not ctx.view.advisorOnly

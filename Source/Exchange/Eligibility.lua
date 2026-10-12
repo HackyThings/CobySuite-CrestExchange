@@ -153,7 +153,7 @@ function Eligibility.TierCurrency(season, tierKey)
   end
 end
 
--- Every trade of the season with its state, for the Trade requirements list
+-- Every trade of the season with its state, for the Trade Requirements list
 function Eligibility.All(season, obs)
   local list = {}
   for _, product in ipairs(season.products) do

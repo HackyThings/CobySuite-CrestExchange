@@ -15,6 +15,20 @@ CobysCrestExchange.Data = CobysCrestExchange.Data or {}
 
 CobysCrestExchange.Data.Changelog = {
   {
+    version = "1.0.1",
+    title = "A newer version notice and safer plans",
+    date = "2026-10-11",
+    new = {
+      "Newer version notice: a chat line when someone in your guild or group has a newer version",
+    },
+    fixed = {
+      "{/ce} addons: clicking a picture no longer shows an error",
+      "Stopped plans: Review Remaining keeps the crests the plan protects",
+      "Saved data: the current season's reserves and plan are always kept",
+      "An older version no longer resumes a newer version's plan",
+    },
+  },
+  {
     version = "1.0.0",
     title = "Out of beta",
     date = "2026-10-06",

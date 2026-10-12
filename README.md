@@ -15,8 +15,9 @@ A better crest exchange at Vaskarn in Silvermoon (WoW Midnight 12.1). Choose how
 - A reserve per tier that Max and every exchange leave alone.
 - Locked trades explained, down to the gear slot.
 - Your Interact key can run the whole exchange.
+- A chat line when a newer version is out, which you can turn off in the settings.
 
-## Quick Start
+## Quick start
 
 1. Talk to Vaskarn and click the tier you want more of.
 2. Type an amount, or press Max, then pick a route.
@@ -31,7 +32,7 @@ Stop, combat, or closing Vaskarn's window pauses the buying; nothing more is bou
 
 **Manual:** Drop the `CobysCrestExchange` folder into your `Interface/AddOns/`. No dependencies.
 
-## Slash Commands
+## Slash commands
 
 ```
 /ce                   Open or close the exchange window (also /ce show)
@@ -52,7 +53,7 @@ Stop, combat, or closing Vaskarn's window pauses the buying; nothing more is bou
 
 Copyright (C) 2026 Cobanyte. Released under the GNU General Public License, version 2 (see [LICENSE](LICENSE)).
 
-## Issues / Feedback
+## Issues / feedback
 
 Found a bug? Copy `/ce dump`, then run `/ce debug` and press **Copy Last 250**, and send both with a line about what you were doing. The log holds the addon version, your WoW build and your settings.
 

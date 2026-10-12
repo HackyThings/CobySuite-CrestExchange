@@ -224,7 +224,6 @@ function ViewerMixin:LoadStrip()
   local entry = self.entry
   if self.stripEntry ~= entry then
     self:ReleaseStrip()
-    self.stripEntry = entry
     for i, image in ipairs(entry.images) do
       local b = self.Thumbs[i]
       if not b then
@@ -240,6 +239,7 @@ function ViewerMixin:LoadStrip()
       b:Show()
     end
     for i = #entry.images + 1, #self.Thumbs do self.Thumbs[i]:Hide() end
+    self.stripEntry = entry   -- set once the thumbnails exist, which LayoutStrip waits for
   end
   for i, b in ipairs(self.Thumbs) do b:SetSelected(i == self.index) end
   self:LayoutStrip()
@@ -247,7 +247,9 @@ end
 
 function ViewerMixin:LayoutStrip()
   local entry = self.entry
-  if not entry then return end
+  -- the strip's size handler can run as the view shows, before LoadStrip has
+  -- made this addon's thumbnails (it lays them out itself when it has)
+  if not entry or self.stripEntry ~= entry then return end
   local clipW = self.Strip:GetWidth()
   if not (clipW and clipW > 1) then return end
   local count = #entry.images
@@ -510,7 +512,7 @@ local function Build(opts)
   end
   local guide = UI.CreateGuideWindow({
     name = host .. "AddonsWindow",
-    title = "Cobanyte's Addons",
+    title = "Cobanyte's addons",
     icon = opts.icon,
     -- Cobanyte's default (2026-10-06): half the width and two thirds the
     -- height of his 1920 x 1080 screen at his UI scale (one unit is one pixel
@@ -604,6 +606,6 @@ function UI.AddonsGuideSection(opts)
       T.Note("The list only opens when you ask for it."),
     },
     try = { { slash, "Open the list of addons" } },
-    buttons = { { text = "Show my addons", width = 140, onClick = function() UI.ToggleAddonsWindow(opts) end } },
+    buttons = { { text = "Show My Addons", width = 140, onClick = function() UI.ToggleAddonsWindow(opts) end } },
   }
 end

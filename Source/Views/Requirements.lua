@@ -220,7 +220,7 @@ local function Build(host)
       if nav.reqKey and nav.from == "overview" then return Window.Go("overview", nil, { "reqKey", "from" }) end
       Window.Go("overview")
     end })
-  page.Copy = UI.CreateButton(host, { text = "Copy details", size = { 120, 22 },
+  page.Copy = UI.CreateButton(host, { text = "Copy Details", size = { 120, 22 },
     point = { "BOTTOMRIGHT", host, "BOTTOMRIGHT", 0, 4 }, onClick = function() CobysCrestExchange.Capture.Show() end })
   return page
 end

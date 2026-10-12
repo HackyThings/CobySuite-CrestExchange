@@ -183,7 +183,7 @@ end
 --   opts.extra      the addon's own commands, placed before test
 --   opts.perf       function returning the addon's Perf instance, nil without
 --                   one: "perf" exists only while it returns one, and opens the
---                   Perf window on the addon. Release builds strip the addon's
+--                   development window on its Perf tab, on the addon. Release builds strip the addon's
 --                   perf line, so a release never builds this entry.
 -------------------------------------------------------------------------------
 function Slash.StandardCommands(opts)
@@ -247,7 +247,7 @@ function Slash.StandardCommands(opts)
   end
   if opts.perf then
     Add({
-      name = "perf", help = "Open the Perf window on this addon: benchmarks, Record and load times",
+      name = "perf", help = "Open the development window on its Perf tab, on this addon: benchmarks, Record and load times",
       available = function() return opts.perf() ~= nil end,
       run = function()
         local perf = opts.perf()

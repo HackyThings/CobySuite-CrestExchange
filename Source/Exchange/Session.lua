@@ -20,8 +20,8 @@
 --     without proof goes to UNCERTAIN; nothing is ever retried automatically.
 --     A purchase sent this session still settles by itself from UNCERTAIN the
 --     moment proof shows up (then pauses or opens, never buys); one restored
---     after a reload waits for "Check again", since its saved totals may be
---     stale. "Check again" only reads: it never starts automatic opening.
+--     after a reload waits for "Check Again", since its saved totals may be
+--     stale. "Check Again" only reads: it never starts automatic opening.
 --   * Stop, combat and the vendor closing pause; nothing resumes spending by
 --     itself (not after combat, not after a reload). Resuming is a fresh
 --     review and confirmation of what is left.
@@ -483,6 +483,31 @@ end
 
 local ApprovePlan   -- defined with the other plan functions below
 
+-- The reserve a plan step's source tier keeps: the larger of the player's own
+-- reserve and, for a tier the plan passes through without spending, its balance
+-- at the start
+local function StepReserve(step)
+  local plan = S.plan
+  local obs = Observer.Current()
+  local tier = obs.season and Seasons.Tier(obs.season, step.from)
+  local reserve = tier and Store.GetReserve(tier.currencyID) or 0
+  local keep = plan and plan.keep and plan.keep[step.from]
+  return math.max(reserve, keep or 0)
+end
+
+-- The plan step a paused order buys for, or nil (a plain order, an open step)
+local function OrderPlanStep()
+  local step = S.plan and S.order and S.order.planStep and S.plan.steps[S.order.planStep]
+  return step and step.from and step or nil
+end
+
+-- A resumed plan step's quote keeps the same floor its buyer enforces
+-- (Task #312); nil for anything but the paused order's own source tier
+function Session.ResumeReserve(tierKey)
+  local step = OrderPlanStep()
+  if step and step.from == tierKey then return StepReserve(step) end
+end
+
 local function Approve(fingerprint, autoOpen)
   if S.state ~= ST.REVIEWING then return end
   if S.frozenPlan then return ApprovePlan(fingerprint, autoOpen) end
@@ -500,7 +525,10 @@ local function Approve(fingerprint, autoOpen)
     S.order.autoOpen = autoOpen
     S.order.signature = q.signature
     S.order.cost = q.cost
-    S.order.reserve = q.reserve or 0
+    -- A plan step never drops the balance its plan keeps; a plain order
+    -- takes the reserve it was quoted with, lower or higher
+    local step = OrderPlanStep()
+    S.order.reserve = step and math.max(q.reserve or 0, StepReserve(step)) or (q.reserve or 0)
   else
     S.order = Ledger.NewOrder(q, { now = Seams.Call("Time") or 0, season = obs.season and obs.season.key,
       npcID = obs.merchant and obs.merchant.npcID, destCurrencyID = DestCurrency(obs, q.product), autoOpen = autoOpen })
@@ -512,18 +540,6 @@ local function Approve(fingerprint, autoOpen)
     q.spend, S.order.cost or 0, S.order.reserve or 0, tostring(q.limiter), Snapshot(obs, S.order))
   Enter(ST.BUYING)
   Step()
-end
-
--- The reserve a plan step's source tier keeps: the larger of the player's own
--- reserve and, for a tier the plan passes through without spending, its balance
--- at the start
-local function StepReserve(step)
-  local plan = S.plan
-  local obs = Observer.Current()
-  local tier = obs.season and Seasons.Tier(obs.season, step.from)
-  local reserve = tier and Store.GetReserve(tier.currencyID) or 0
-  local keep = plan and plan.keep and plan.keep[step.from]
-  return math.max(reserve, keep or 0)
 end
 
 -- An order that opens packs already in the bags (no purchase)
@@ -566,6 +582,8 @@ StartPlanStep = function()
     Log("Plan step %d of %d: open %s x%d", plan.index, #plan.steps, step.key, quota)
     return ToOpening()
   end
+  -- A Store that can't save can't record the attempt before a purchase
+  if Store.IsReadOnly() then return Enter(ST.NEXT_STEP, nil, "read_only") end
   if obs.inCombat then return Enter(ST.NEXT_STEP, nil, "combat") end
   if not (obs.merchant and obs.merchant.isExchange) then return Enter(ST.NEXT_STEP, nil, "merchant_closed") end
   local q = CobysCrestExchange.Quote.Build(obs, { productKey = step.key, crests = step.packs * step.yield },
@@ -660,7 +678,7 @@ end
 -------------------------------------------------------------------------------
 -- Settles an uncertain purchase or open from `obs`, on proof only. Every new
 -- observation tries it for a purchase sent this session (a late purchase
--- settles by itself); `asked` is the player's Check again, which also covers
+-- settles by itself); `asked` is the player's Check Again, which also covers
 -- a restored attempt, says when there is still no proof, and returns an
 -- unproven open to ready (an open spends nothing).
 local function SettleUncertain(obs, asked)
@@ -939,7 +957,7 @@ end
 --          pack used there would sell, so the press closes the window and
 --          opens nothing
 --   buy    NEXT_STEP at Vaskarn: the press buys the plan's next step ("Buy
---          step N of M"); an open step reads "Start step N of M" anywhere
+--          Step N of M"); an open step reads "Start Step N of M" anywhere
 --   talk   NEXT_STEP away from Vaskarn: nothing to press; the label says why
 --   wait   buying or opening is under way
 -- nil for every other state (the page shows its own buttons there)
@@ -948,14 +966,14 @@ RawNextAction = function()
   local st = S.state
   if st == ST.READY_TO_OPEN and S.order then
     local ok, why = Opener.MayOpen(S.order, S.ledger, obs, S.lootPending)
-    if ok then return { mode = "open", label = "Open next pack", enabled = true } end
+    if ok then return { mode = "open", label = "Open Next Pack", enabled = true } end
     if why == "merchant_open" and not obs.inCombat then
-      return { mode = "close", label = "Close the vendor's window", enabled = true, reason = why }
+      return { mode = "close", label = "Close the Vendor's Window", enabled = true, reason = why }
     end
-    return { mode = "open", label = "Open next pack", enabled = false, reason = why }
+    return { mode = "open", label = "Open Next Pack", enabled = false, reason = why }
   end
   if st == ST.WAITING_FOR_OPEN or st == ST.WAITING_FOR_LOOT then
-    return { mode = "wait", label = "Opening pack...", enabled = false }
+    return { mode = "wait", label = "Opening Pack...", enabled = false }
   end
   if st == ST.BUYING or st == ST.WAITING_FOR_PURCHASE then
     return { mode = "wait", label = "Buying...", enabled = false }
@@ -963,12 +981,12 @@ RawNextAction = function()
   local plan = S.plan
   if st == ST.NEXT_STEP and plan and plan.steps[plan.index] then
     if plan.steps[plan.index].kind == "open" then
-      return { mode = "buy", label = string.format("Start step %d of %d", plan.index, #plan.steps), enabled = not obs.inCombat }
+      return { mode = "buy", label = string.format("Start Step %d of %d", plan.index, #plan.steps), enabled = not obs.inCombat }
     end
-    local label = string.format("Buy step %d of %d", plan.index, #plan.steps)
+    local label = string.format("Buy Step %d of %d", plan.index, #plan.steps)
     if obs.inCombat then return { mode = "buy", label = label, enabled = false, reason = "combat" } end
     if obs.merchant and obs.merchant.isExchange then return { mode = "buy", label = label, enabled = true } end
-    return { mode = "talk", label = string.format("Talk to Vaskarn for step %d", plan.index), enabled = false,
+    return { mode = "talk", label = string.format("Talk to Vaskarn for Step %d", plan.index), enabled = false,
       reason = "merchant_closed" }
   end
   return nil
@@ -1030,15 +1048,20 @@ Session._test = {
   end,
   -- WithState(fn): runs fn(getState, views) on a fresh state, then puts the
   -- real one back; views collects every SessionChanged view instead of
-  -- broadcasting it
+  -- broadcasting it. The quote controller's selection and quote are put back
+  -- too: a resume fired inside (Review Remaining) once left its pack cap on
+  -- every later test's quotes (Task #317)
   WithState = function(fn)
     local saved, savedSpy = S, notifySpy
+    local C = CobysCrestExchange.Quote.Controller
+    local savedSelection, savedQuote = C.selection, C.quote
     local views = {}
     S = NewState()
     notifySpy = function(view) views[#views + 1] = view end
     local ok, err = pcall(fn, function() return S end, views)
     CancelAllTimers()
     S, notifySpy = saved, savedSpy
+    C.selection, C.quote = savedSelection, savedQuote
     if not ok then error(err, 0) end
   end,
 }

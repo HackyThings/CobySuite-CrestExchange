@@ -168,12 +168,22 @@ Quote.Controller = C
 function C.Options(obs, product)
   local Session, Store = CobysCrestExchange.Session, CobysCrestExchange.Store
   local src = obs.season and Seasons.Tier(obs.season, product.from)
+  -- A paused plan step resumes with its plan's floor, as its buyer enforces
+  local planFloor = Session and Session.ResumeReserve and Session.ResumeReserve(product.from)
   return {
-    reserve = src and Store.GetReserve(src.currencyID) or 0,
+    reserve = planFloor or (src and Store.GetReserve(src.currencyID) or 0),
     unsettled = Session and Session.Unsettled(obs) or {},
     capPacks = C.selection and C.selection.capPacks or nil,
     planning = not (obs.merchant and obs.merchant.isExchange),
   }
+end
+
+-- A route the Get page prices is a new trade, never a resume: no pack cap
+-- from a resumed order's selection, which can still be the current one (Task #317)
+function C.RouteOptions(obs, product)
+  local opts = C.Options(obs, product)
+  opts.capPacks = nil
+  return opts
 end
 
 function C.Refresh()

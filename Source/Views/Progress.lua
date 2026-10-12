@@ -3,21 +3,21 @@
 --
 -- One page with a mode per session state:
 --   buying     purchased so far, crests spent, waiting; Stop after this
---              purchase; Buy next pack only when the game needs a press
+--              purchase; Buy Next Pack only when the game needs a press
 --   opening    opened so far, crests received, what the next press does;
 --              the one button (Views/SecureOpen.lua) fixed at the bottom
---              center; End exchange here (End plan here with a plan) sits
+--              center; End Exchange Here (End Plan Here with a plan) sits
 --              bottom left, clear of it
 --   next       a plan between steps: the ladder, the step bar and what the
 --              next step does; the one button buys it at Vaskarn (or starts
 --              an open step), else says to talk to him; Discard
 --   paused     the unfinished order: received, still in packs, not yet
---              bought; Open purchased packs, Review remaining, Discard
+--              bought; Open Purchased Packs, Review Remaining, Discard
 --   uncertain  the last purchase or open isn't confirmed; nothing more is
 --              bought; the rows show what changed since the purchase, the
 --              message what to look for and what each button does; Check
---              again only reads; Copy details, Discard
---   done       the receipt; Choose another exchange, Close
+--              again only reads; Copy Details, Discard
+--   done       the receipt; Choose Another Exchange, Close
 -------------------------------------------------------------------------------
 
 local Views = CobysCrestExchange.Views
@@ -113,31 +113,31 @@ local function Build(host)
   page.Tiles:SetPoint("TOPRIGHT", host, "TOPRIGHT", 0, -30)
   page.Tiles:Hide()
 
-  page.Stop = Button(host, "Stop after this purchase", 190, { "BOTTOMLEFT", host, "BOTTOMLEFT", 0, 44 },
+  page.Stop = Button(host, "Stop After This Purchase", 190, { "BOTTOMLEFT", host, "BOTTOMLEFT", 0, 44 },
     function() Command("stop") end)
-  page.BuyNext = Button(host, "Buy next pack", 150, { "BOTTOMRIGHT", host, "BOTTOMRIGHT", 0, 44 },
+  page.BuyNext = Button(host, "Buy Next Pack", 150, { "BOTTOMRIGHT", host, "BOTTOMRIGHT", 0, 44 },
     function() Command("continue") end)
-  page.Leave = Button(host, "End exchange here", 190, { "BOTTOMLEFT", host, "BOTTOMLEFT", 0, 44 },
+  page.Leave = Button(host, "End Exchange Here", 190, { "BOTTOMLEFT", host, "BOTTOMLEFT", 0, 44 },
     function() Command("leave_rest") end)
   -- Disabled while a pack opens: its tooltip still says why
   page.Leave:SetMotionScriptsWhileDisabled(true)
   UI.AddDynamicTooltip(page.Leave, function(tip, button)
     if not button:IsEnabled() then
-      tip:AddLine(page.planActive and "End plan here" or "End exchange here")
+      tip:AddLine(page.planActive and "End Plan Here" or "End Exchange Here")
       tip:AddLine("Wait for the pack to finish opening.", 1, 1, 1, true)
     elseif page.planActive then
-      tip:AddLine("End plan here")
+      tip:AddLine("End Plan Here")
       tip:AddLine("Ends this plan without buying its remaining steps. Unopened packs stay in your bags.", 1, 1, 1, true)
     else
-      tip:AddLine("End exchange here")
+      tip:AddLine("End Exchange Here")
       tip:AddLine("Ends this exchange without buying any more packs. Unopened packs stay in your bags.", 1, 1, 1, true)
     end
   end, { fillable = true })
-  page.OpenPurchased = Button(host, "Open purchased packs", 170, { "BOTTOMLEFT", host, "BOTTOMLEFT", 0, 44 },
+  page.OpenPurchased = Button(host, "Open Purchased Packs", 170, { "BOTTOMLEFT", host, "BOTTOMLEFT", 0, 44 },
     function() Command("open_purchased") end)
-  page.ReviewRemaining = Button(host, "Review remaining", 150, { "BOTTOMRIGHT", host, "BOTTOMRIGHT", 0, 44 },
+  page.ReviewRemaining = Button(host, "Review Remaining", 150, { "BOTTOMRIGHT", host, "BOTTOMRIGHT", 0, 44 },
     function() Command("review_remaining") end)
-  page.Discard = Button(host, "Discard order", 120, { "BOTTOMLEFT", host, "BOTTOMLEFT", 0, 4 },
+  page.Discard = Button(host, "Discard Order", 120, { "BOTTOMLEFT", host, "BOTTOMLEFT", 0, 4 },
     function()
       -- Read at the click: only a purchase still unconfirmed gets the warning
       local view = CobysCrestExchange.Session.View()
@@ -145,19 +145,19 @@ local function Build(host)
       discardPopup:SetBody(unconfirmed and (DISCARD_BODY .. " " .. DISCARD_UNCONFIRMED) or DISCARD_BODY)
       discardPopup:Show()
     end)
-  page.CheckAgain = Button(host, "Check again", 120, { "BOTTOMRIGHT", host, "BOTTOMRIGHT", 0, 44 },
+  page.CheckAgain = Button(host, "Check Again", 120, { "BOTTOMRIGHT", host, "BOTTOMRIGHT", 0, 44 },
     function() Command("check_again") end)
-  page.CopyDetails = Button(host, "Copy details", 120, { "BOTTOMRIGHT", host, "BOTTOMRIGHT", 0, 4 },
+  page.CopyDetails = Button(host, "Copy Details", 120, { "BOTTOMRIGHT", host, "BOTTOMRIGHT", 0, 4 },
     function() CobysCrestExchange.Capture.Show() end)
   UI.AddDynamicTooltip(page.CheckAgain, function(tip)
-    tip:AddLine("Check again")
+    tip:AddLine("Check Again")
     tip:AddLine("Reads your bags and crests now. Only reads: nothing is bought.", 1, 1, 1, true)
   end, { fillable = true })
   UI.AddDynamicTooltip(page.CopyDetails, function(tip)
-    tip:AddLine("Copy details")
+    tip:AddLine("Copy Details")
     tip:AddLine("A plain-text report of your crests, packs and this exchange. It opens selected: press Ctrl+C to copy it, then paste it where someone can help.", 1, 1, 1, true)
   end, { fillable = true })
-  page.Another = Button(host, "Choose another exchange", 190, { "BOTTOMLEFT", host, "BOTTOMLEFT", 0, 4 },
+  page.Another = Button(host, "Choose Another Exchange", 190, { "BOTTOMLEFT", host, "BOTTOMLEFT", 0, 4 },
     function() Command("done"); Window.Go("overview") end)
   page.Close = Button(host, "Close", 90, { "BOTTOMRIGHT", host, "BOTTOMRIGHT", 0, 4 },
     function() Command("done"); Window.Go("overview"); Window.Hide() end)
@@ -203,7 +203,7 @@ local function Buying(page, ctx, view)
     { "Spent", string.format("%s of %s", T.Count(l.spent), T.Count(o.approvedPacks * o.cost)) },
   })
   local msg = view.state == "WAITING_FOR_PURCHASE" and "Waiting for the merchant..." or ""
-  if view.needsPress then msg = "The game needs a press for each purchase. Press Buy next pack to continue." end
+  if view.needsPress then msg = "The game needs a press for each purchase. Press Buy Next Pack to continue." end
   if view.notice then msg = T.Notice(view.notice, view.reason) or msg end
   page.Message:SetText(msg)
   Only(page, page.Stop, view.needsPress and view.state == "BUYING" and page.BuyNext or nil)
@@ -256,12 +256,12 @@ local function Opening(page, ctx, view)
   page.Message:SetText(msg or "")
   -- The last refused press, only while that refusal still holds: one from an
   -- earlier pack or exchange never lingers (run 2026-10-01: "Wait for the last
-  -- pack" stayed up beside a ready Open next pack)
+  -- pack" stayed up beside a ready Open Next Pack)
   local lastRefusal = Views.SecureOpen.button and Views.SecureOpen.button.lastRefusal
   local mayOpen, why = CobysCrestExchange.Session.MayOpen()
   page.OpenHint:SetText(lastRefusal and not mayOpen and why == lastRefusal and T.OpenBlock(lastRefusal) or "")
   page.planActive = view.plan ~= nil
-  page.Leave:SetText(view.plan and "End plan here" or "End exchange here")
+  page.Leave:SetText(view.plan and "End Plan Here" or "End Exchange Here")
   -- Ending waits for an open in flight (and its loot) to settle
   page.Leave:SetEnabled(view.state == "READY_TO_OPEN")
   Only(page, page.Leave)
@@ -288,10 +288,10 @@ local function Paused(page, ctx, view)
   if sum.notBoughtPacks > 0 and not canReview then
     lines[#lines + 1] = "Talk to Vaskarn again to review and buy the rest."
   elseif canReview then
-    lines[#lines + 1] = "Review remaining to buy the rest."
+    lines[#lines + 1] = "Review Remaining to buy the rest."
   end
   if (view.openQuota or 0) > 0 then
-    lines[#lines + 1] = "Open purchased packs to collect the crests already bought."
+    lines[#lines + 1] = "Open Purchased Packs to collect the crests already bought."
   end
   page.Message:SetText(table.concat(lines, "\n"))
   Only(page, (view.openQuota or 0) > 0 and page.OpenPurchased or nil, canReview and page.ReviewRemaining or nil, page.Discard)
@@ -390,7 +390,7 @@ local function Done(page, ctx, view)
     message = (r and (r.unopened or 0) > 0) and "This exchange is done." or "All packs opened. What you received is shown above."
   end
   if r and (r.unopened or 0) > 0 then
-    message = message .. " Unopened packs stay in your bags: choose another exchange, then Open packs on the first page."
+    message = message .. " Unopened packs stay in your bags: press Choose Another Exchange, then Open Packs on the first page."
   end
   page.Message:SetText(message)
   Only(page, page.Another, page.Close)
@@ -415,8 +415,8 @@ local function PlanModel(ctx, view)
       local node = model.nodes[s.to]
       if node then node.sub = string.format("Step %d: %s%s", i, T.StepWords(season, s), state == "done" and " (done)" or "") end
     else
-    model.links[s.to] = { state = state, label = string.format("Step %d: %s, %s to %s", i, T.Packs(s.packs),
-      T.Crests(season, s.from, s.spend or s.packs * s.cost), T.Crests(season, s.to, s.packs * s.yield)) }
+      model.links[s.to] = { state = state, label = string.format("Step %d: %s, %s to %s", i, T.Packs(s.packs),
+        T.Crests(season, s.from, s.spend or s.packs * s.cost), T.Crests(season, s.to, s.packs * s.yield)) }
     end
   end
   return model

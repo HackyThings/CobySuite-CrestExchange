@@ -12,8 +12,9 @@
 --   * a plan using every lower tier     "Spend 30 Hero, 90 Champion in 2 steps"
 -- A route that can't reach the amount says why, and a locked trade opens its
 -- requirements when clicked. A route that works is chosen for you (the plan
--- first, then a trade up) and highlighted; clicking another chooses it. Under the routes, a small path
--- shows the chosen one tier by tier. Review goes to the review page; Adjust
+-- first, then a trade up) and highlighted; clicking another chooses it. Under
+-- the routes, a small path shows the chosen one tier by tier. Review goes to
+-- the review page; Adjust
 -- on the plan opens the full ladder with its Spend boxes. Unopened packs of
 -- this tier are offered first.
 -------------------------------------------------------------------------------
@@ -63,7 +64,7 @@ local function TradeRoute(ctx, product)
   local route = { key = product.key, kind = "trade", product = product,
     icon = product.itemID and Seams.Call("ItemIcon", product.itemID) or 134400,
     title = (product.kind == "up" and "Trade up from " or "Trade down from ") .. T.Tier(season, product.from) }
-  local q = Quote.Build(ctx.obs, { productKey = product.key, crests = S.crests }, Quote.Controller.Options(ctx.obs, product))
+  local q = Quote.Build(ctx.obs, { productKey = product.key, crests = S.crests }, Quote.Controller.RouteOptions(ctx.obs, product))
   route.open = result.state == "available" or (result.state == "away" and q.offer ~= nil)
   if not route.open then
     route.line, route.locked, route.state = Reason(result), result.state == "locked", result.state
@@ -231,9 +232,9 @@ local function StillWorks(page, ctx, tierKey)
     local packs = string.format("%s unopened %s %s", T.Count(t.packs), T.Tier(season, tierKey), T.Plural(t.packs, "pack", "packs"))
     local fit = T.Openable(t, page.yield)
     if fit >= t.packs then
-      out[#out + 1] = string.format("Your %s can still open: use the Open packs banner above.", packs)
+      out[#out + 1] = string.format("Your %s can still open: use the Open Packs banner above.", packs)
     elseif fit > 0 then
-      out[#out + 1] = string.format("%s of your %s can open now (use the Open packs banner above); the rest wait until %s.",
+      out[#out + 1] = string.format("%s of your %s can open now (use the Open Packs banner above); the rest wait until %s.",
         T.Count(fit), packs, T.WaitFor(t))
     else
       out[#out + 1] = string.format("Your %s wait in your bags until %s.", packs, T.WaitFor(t))
@@ -245,9 +246,9 @@ local function StillWorks(page, ctx, tierKey)
   if up then
     for _, product in ipairs(Seasons.TradesInto(season, up.key)) do
       if product.kind == "up" then
-        local q = Quote.MaxFor(ctx.obs, product.key, Quote.Controller.Options(ctx.obs, product))
+        local q = Quote.MaxFor(ctx.obs, product.key, Quote.Controller.RouteOptions(ctx.obs, product))
         if Eligibility.ForTrade(season, product, ctx.obs).state == "available" and (q.maxCrests or 0) > 0 then
-          out[#out + 1] = string.format("What still works: trading your %s up into %s, up to %s now (Get %s on the first page).",
+          out[#out + 1] = string.format("What still works: trading your %s up into %s, up to %s now (click %s on the first page).",
             T.Tier(season, tierKey), T.Tier(season, up.key), T.Crests(season, up.key, q.maxCrests), T.TierLabel(season, up.key))
         end
       end
@@ -432,7 +433,7 @@ local function BuildExisting(host, page)
   existing.Text:SetJustifyH("LEFT")
   existing.Text:SetJustifyV("MIDDLE")
   existing.Text:SetMaxLines(2)
-  existing.Button = UI.CreateButton(existing, { text = "Open packs", size = { 94, 20 },
+  existing.Button = UI.CreateButton(existing, { text = "Open Packs", size = { 94, 20 },
     point = { "RIGHT", existing, "RIGHT", -4, 0 },
     onClick = function()
       if existing.productKey then Bus():Fire(E.SessionCommand, "open_existing", existing.productKey) end
@@ -616,8 +617,8 @@ local function ClosedLine(routes)
 end
 
 -- What the presses after buying look like (shared with Review's wording):
--- packs you already have need no purchase; several purchases each need
--- Vaskarn's window again
+-- packs you already have need no purchase; reopening Vaskarn's window between
+-- purchases is needed only when packs can't open with it open
 local function FlowWords(buys, opens)
   local close = Seasons.CAPABILITIES.openAtVendor and "open each pack with one press"
     or "close Vaskarn's window and open each pack with one press"
@@ -626,7 +627,7 @@ local function FlowWords(buys, opens)
   if buys > 1 then
     -- Kept short: Review adds the pack count to this line on a docked panel
     return own .. (Seasons.CAPABILITIES.openAtVendor
-      and "For each purchase: buy, open the packs, then talk to Vaskarn again."
+      and "For each purchase: buy, open the packs, then buy the next step."
       or "For each purchase: buy, close Vaskarn's window, open the packs, then talk to him again.")
   end
   return own .. "After buying, " .. close .. "."
@@ -681,7 +682,7 @@ local function SummaryText(page, ctx, tierKey, chosen, room)
     for i, step in ipairs(steps) do
       if i == fit and #steps > fit then
         local left = #steps - i + 1
-        lines[#lines + 1] = string.format("%s%d %s: Review plan lists them all.", i > 1 and "and " or "", left,
+        lines[#lines + 1] = string.format("%s%d %s: Review Plan lists them all.", i > 1 and "and " or "", left,
           i > 1 and T.Plural(left, "more step", "more steps") or "steps")
         break
       end
@@ -768,7 +769,7 @@ function page:Refresh(ctx)
   self.Summary:SetText(SummaryText(self, ctx, tierKey, chosen, math.floor((y - BUTTONS_TOP) / LINE_H)))
   self.SummaryHover:EnableMouse(self.Summary:IsTruncated())
   self.Review:SetEnabled(ReviewReady(ctx, chosen) == true)
-  self.Review:SetText(chosen and chosen.kind == "plan" and "Review plan" or "Review")
+  self.Review:SetText(chosen and chosen.kind == "plan" and "Review Plan" or "Review")
 end
 
 -- Review the chosen route for the amount: a trade through the quote

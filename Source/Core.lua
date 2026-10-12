@@ -36,12 +36,12 @@ CobysCrestExchange.VERSION = VERSION
 -- Slash commands
 --
 -- The suite's standard set (CobySuite.Slash.StandardCommands: show, settings,
--- guide, changelog, addons, debug, reset windows, and test in development builds only, with the
--- same aliases in every addon) plus this addon's own dump, registered through
--- CobySuite.Slash, which generates help and version. Every module is defined
--- in a later file, so each handler resolves it per call. The release build
--- leaves the Tests folder out, so CobysCrestExchange.Tests is nil there and
--- the test command does not exist.
+-- guide, changelog, addons, debug, reset windows, and test in development
+-- builds only, with the same aliases in every addon) plus this addon's own
+-- dump, registered through CobySuite.Slash, which generates help and version.
+-- Every module is defined in a later file, so each handler resolves it per
+-- call. The release build leaves the Tests folder out, so
+-- CobysCrestExchange.Tests is nil there and the test command does not exist.
 -------------------------------------------------------------------------------
 local function Views() return CobysCrestExchange.Views or {} end
 
@@ -57,9 +57,10 @@ CobysCrestExchange.AddonsList = {
   state = function() return COBYS_CREST_EXCHANGE_WINDOW_STATE end,
 }
 
--- "/ce reset windows" (CobySuite.UI.ResetWindows): the exchange window, settings, guide, changelog
--- and addon list all save into the window-state table, so it finds them; the debug window saves
--- nothing and is listed, and the exchange window docks beside Vaskarn's window again if it is open there
+-- "/ce reset windows" (CobySuite.UI.ResetWindows): the exchange window,
+-- settings, guide, changelog and addon list all save into the window-state
+-- table, so it finds them; the debug window saves nothing and is listed, and
+-- the exchange window docks beside Vaskarn's window again if it is open there
 CobysCrestExchange.WindowsReset = {
   host = "CobysCrestExchange", title = "Coby's Crest Exchange", icon = CobysCrestExchange.ICON,
   message = function(text) CobysCrestExchange.Utilities.Message(text) end,
@@ -127,5 +128,11 @@ EventUtil.RegisterOnceFrameEventAndCallback("PLAYER_LOGIN", function()
     if Views.Dock then Views.Dock.Hook() end
     if Views.WhatsNew then Views.WhatsNew.OnLogin() end
   end
+  -- The suite's version check: a chat line when a newer release is out
+  CobySuite_CobysCrestExchange.VersionCheck.Register({
+    key = "CE", addon = ADDON_NAME, title = "Coby's Crest Exchange", color = ns.BRAND_COLOR,
+    enabled = function() return ns.Config.Get(ns.Config.Options.VERSION_CHECK) end,
+    log = function(fmt, ...) ns.Debug.Log("INIT", fmt, ...) end,
+  })
   ns.Debug.Log("INIT", "PLAYER_LOGIN complete (season %s)", season and season.key or "unknown")
 end)

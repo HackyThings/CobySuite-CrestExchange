@@ -4,6 +4,19 @@ All notable changes to Coby's Crest Exchange are documented here. Format follows
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-10-11
+
+### Added
+
+- **Newer version notice.** When someone in your guild or group has a newer version of Coby's Crest Exchange, one line in chat says which version is out and which one you have. Your copy shares its version with them quietly, so they hear about a newer one from you too. On by default; turn it off with "Tell me when a newer version is out" in `/ce settings` (Exchange).
+
+### Fixed
+
+- Clicking a picture in `/ce addons` no longer shows an error.
+- **A stopped plan keeps the crests it protects.** When a plan step was stopped and you chose Review Remaining, the rest could spend crests from a tier you had left unticked under Spend, below what the plan promised to keep. Review Remaining now keeps that balance, and Keep at least shows it as "(plan keeps N)".
+- Characters with saved data from more than three seasons always keep the three most recent; before, an older season could be kept and the current one's reserves, unfinished exchange and plan dropped.
+- After going back to an older version of the addon, a plan saved by the newer one no longer comes back and buys its next step.
+
 ## [1.0.0] - 2026-10-06
 
 ### Added

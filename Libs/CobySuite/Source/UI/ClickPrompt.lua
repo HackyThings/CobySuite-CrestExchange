@@ -286,7 +286,7 @@ function UI.ConfirmResetWindows(opts)
       icon = opts.icon,
       body = "Put every " .. (opts.title or host) .. " window back at its default place and size? "
         .. "Your settings stay as they are.",
-      confirmText = "Reset windows", cancelText = "Cancel",
+      confirmText = "Reset Windows", cancelText = "Cancel",
       point = { "CENTER", UIParent, "CENTER", 0, 0 },
       fixedPlace = true, hidden = true,
       onConfirm = function()

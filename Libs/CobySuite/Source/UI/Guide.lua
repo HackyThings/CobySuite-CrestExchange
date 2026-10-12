@@ -306,6 +306,11 @@ local function BuildSection(guide, def)
   s.arrowGlow = header.ArrowGlow
   title:SetText(def.title or def.key)
   summary:SetText(def.summary or "")
+  -- a long title wraps to a second line instead of being cut (Task #265; a What's New version's
+  -- name): the one-line height is kept to tell, at layout, how much taller the header must be
+  s.titleLine = math.ceil(title:GetStringHeight())
+  title:SetWordWrap(true)
+  if title.SetMaxLines then title:SetMaxLines(2) end
 
   header:SetScript("OnClick", function()
     local open = not s.expanded
@@ -349,6 +354,19 @@ local function BuildSection(guide, def)
   s.header, s.icon, s.arrow, s.title, s.summary = header, icon, arrow, title, summary
   s.body, s.text = body, text
   return s
+end
+
+-- A header's height for a content width: the guide's, plus the second line of a title that wraps.
+-- The title takes the header's width less the icon and the plus or minus, set here so it is
+-- measured now rather than after the next layout pass
+local function HeaderHeight(s, width)
+  local arrowWidth = s.arrow:GetWidth()
+  if type(arrowWidth) ~= "number" or arrowWidth <= 0 then arrowWidth = 24 end
+  s.title:ClearAllPoints()
+  s.title:SetPoint("TOPLEFT", s.icon, "TOPRIGHT", PAD, -1)
+  s.title:SetWidth(math.max(40, width - (PAD + ICON_SIZE + PAD) - (PAD + arrowWidth + PAD)))
+  local extra = math.max(0, math.ceil(s.title:GetStringHeight()) - (s.titleLine or 0))
+  return HEADER_HEIGHT + extra
 end
 
 -- The body's height for a content width
@@ -410,7 +428,9 @@ function GuideMixin:Relayout()
     s.header:SetPoint("RIGHT", self.Child, "RIGHT", 0, 0)
     s.arrow:SetAtlas(s.expanded and ARROW_OPEN or ARROW_CLOSED, true)
     s.arrowGlow:SetAtlas(s.expanded and ARROW_OPEN or ARROW_CLOSED)
-    y = y + HEADER_HEIGHT
+    local headerHeight = HeaderHeight(s, width)
+    s.header:SetHeight(headerHeight)
+    y = y + headerHeight
     if s.expanded then
       local h = MeasureBody(s, width)
       s.body:ClearAllPoints()

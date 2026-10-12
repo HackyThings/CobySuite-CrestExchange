@@ -8,7 +8,7 @@
 -- reason in red when locked).
 -- Clicking a tile means "get more of this tier" and opens the source
 -- choice; its tooltip names the cap that binds. Unopened packs get a banner
--- with an Open button, so the player opens those before buying more.
+-- with an Open Packs button, so the player opens those before buying more.
 -------------------------------------------------------------------------------
 
 local Views = CobysCrestExchange.Views
@@ -113,7 +113,7 @@ end
 
 local function BuildBanner(host, page)
   local banner = Strip(host, U.Fonts.BODY, 112)
-  banner.Button = UI.CreateButton(banner, { text = "Open packs", size = { 100, 22 },
+  banner.Button = UI.CreateButton(banner, { text = "Open Packs", size = { 100, 22 },
     point = { "RIGHT", banner, "RIGHT", -6, 0 },
     onClick = function()
       if banner.productKey then
@@ -148,9 +148,9 @@ local function Build(host)
   page.Footer:SetPoint("BOTTOMLEFT", 4, 30)
   page.Footer:SetPoint("BOTTOMRIGHT", -4, 30)
   page.Footer:SetJustifyH("LEFT")
-  page.BeforeButton = UI.CreateButton(host, { text = "Before you spend...", size = { 150, 22 },
+  page.BeforeButton = UI.CreateButton(host, { text = "Before You Spend...", size = { 150, 22 },
     point = { "BOTTOMLEFT", host, "BOTTOMLEFT", 0, 4 }, onClick = function() Window.Go("before") end })
-  page.LocksButton = UI.CreateButton(host, { text = "Trade requirements", size = { 170, 22 },
+  page.LocksButton = UI.CreateButton(host, { text = "Trade Requirements", size = { 170, 22 },
     point = { "BOTTOMRIGHT", host, "BOTTOMRIGHT", 0, 4 },
     onClick = function() Window.Go("requirements", nil, { "reqKey", "from" }) end })
   return page

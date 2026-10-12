@@ -6,7 +6,7 @@
 -- creates nothing. Short sections in the order a player meets them at
 -- Vaskarn. Opened by /ce guide (tutorial), the exchange window's "?", the
 -- settings window's Guide button, and on a fresh install's first login
--- (What's New calls Guide.Show).
+-- (What's new calls Guide.Show).
 -------------------------------------------------------------------------------
 
 local Views = CobysCrestExchange.Views
@@ -46,7 +46,7 @@ Guide.SECTIONS = {
         "One button in the same place runs the exchange.",
         "It opens one pack per press and buys a plan's next step.",
         "Packs open with Vaskarn's window open or closed. Pressing quickly is safe.",
-        "Packs already in your bags get an Open packs banner on the first page, to open them without buying.",
+        "Packs already in your bags get an Open Packs banner on the first page, to open them without buying.",
         "Your Interact key also presses the button while this window is open and expanded. Use a key without Shift, Ctrl, Alt or Meta.",
         "It never works in combat. When a plan needs Vaskarn again, the same key talks to him.",
         "On the Interact key settings page, choose whether the key presses the button and whether the walk back may turn on Enable Interact Key.",
@@ -58,7 +58,7 @@ Guide.SECTIONS = {
         "Adjust shows the whole plan on the ladder: which trades run, in what order, and every balance before and after.",
         "Each lower tier has a Spend box. Unchecked, crests made there on the way are used, but that tier's balance and unopened packs stay untouched.",
         "Crest packs already in your bags count: the plan opens them as a step and buys only what's still needed.",
-        "Confirm starts the first step. When the next step needs Vaskarn, talk to him again and the button reads Buy step and its number.",
+        "Confirm starts the first step. When the next step needs Vaskarn, talk to him again and the button reads Buy Step and its number.",
         "A progress bar shows how far the plan has come.",
     }) } },
   { key = "caps", title = "Room and caps", atlas = "common-icon-forwardarrow",
@@ -77,25 +77,25 @@ Guide.SECTIONS = {
         "Trading up needs the achievement of the tier you spend, earned on this character. Hero into Myth needs Hero of the Mist.",
         "The achievement counts the highest item level each gear slot has reached, so one low slot holds it back.",
         "Trading down needs Vaskarn's quest Upgrade Practicum.",
-        "Trade requirements, on the first page, lists every trade and what it needs.",
+        "Trade Requirements, on the first page, lists every trade and what it needs.",
     }) } },
   { key = "stopping", title = "Stopping and coming back", atlas = "common-icon-undo",
     summary = "Nothing is bought twice.",
     body = { T.Bullets({
         "Stop, combat, closing Vaskarn's window or a reload pause the buying. Closing only this window lets a confirmed purchase carry on.",
         "Back at Vaskarn, the window shows what you received, what's still in packs and what's left to buy.",
-        "Review remaining asks you to confirm again before more is bought. A plan stopped between steps resumes with Buy step.",
+        "Review Remaining asks you to confirm again before more is bought. A plan stopped between steps resumes with Buy Step.",
         "Crests you spend in the meantime never make it buy more.",
         "A slow purchase shows Waiting to see the last purchase. The window moves on by itself, and nothing more is bought until then.",
-        "After a reload or logout mid-purchase, compare the rows with your bags and press Check again.",
+        "After a reload or logout mid-purchase, compare the rows with your bags and press Check Again.",
     }) },
     try = { { "/ce dump", "Show a report of what the addon sees, ready to copy with Ctrl+C, for a bug report" } } },
   { key = "settings", title = "Settings and help", atlas = "common-icon-backarrow",
     summary = "Where the window sits, and where to find this guide.",
     body = { T.Bullets({
-        "Settings cover what talking to Vaskarn brings up (window, tab or nothing), your Interact key, and where the window docks.",
+        "Settings cover what talking to Vaskarn brings up (window, tab or nothing), your Interact key, where the window docks, and whether you hear about newer versions.",
         "The gear on the exchange window opens them too. Changes apply when you press Apply.",
-        "What's New lists what changed in each version, and opens by itself after an update.",
+        "What's new lists what changed in each version, and opens by itself after an update.",
     }) },
     try = {
       { "/ce settings", "Open or close the settings" },

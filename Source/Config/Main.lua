@@ -44,12 +44,14 @@ local base = CobySuite_CobysCrestExchange.Config.New({
     WINDOW_POSITION       = "windowPosition",        -- where it docks: auto, right, left, floating
     USE_INTERACT_KEY      = "useInteractKey",        -- the Interact key presses the one button
     HOLD_INTERACT_SETTING = "holdInteractSetting",   -- Enable Interact Key held on while a plan waits for Vaskarn
+    VERSION_CHECK         = "versionCheck",          -- share the version with guild and group, a chat line when a newer one is out
   },
   defaults = {
     ["vendorOpen"] = "window",
     ["windowPosition"] = "right",
     ["useInteractKey"] = true,
     ["holdInteractSetting"] = true,
+    ["versionCheck"] = true,
   },
   -- Set refuses a failing value and InitializeData puts the default back for
   -- a failing saved one (a hand-edited or damaged file)
@@ -58,6 +60,7 @@ local base = CobySuite_CobysCrestExchange.Config.New({
     ["windowPosition"] = { type = "string", values = { "auto", "right", "left", "floating" } },
     ["useInteractKey"] = { type = "boolean" },
     ["holdInteractSetting"] = { type = "boolean" },
+    ["versionCheck"] = { type = "boolean" },
   },
   -- After the defaults are filled and before the stale keys are removed, so
   -- the old keys are still there to read
