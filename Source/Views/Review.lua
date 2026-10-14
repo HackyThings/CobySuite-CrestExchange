@@ -78,7 +78,7 @@ local function BuildCard(host)
   card.To:SetPoint("LEFT", card.ToIcon, "RIGHT", 4, 0)
   card.Packs = card:CreateFontString(nil, "OVERLAY", U.Fonts.DATA)
   card.Packs:SetPoint("RIGHT", -8, 0)
-  card.Packs:SetTextColor(0.75, 0.75, 0.75)
+  card.Packs:SetTextColor(unpack(U.Colors.LABEL_GRAY))
   return card
 end
 
@@ -97,14 +97,6 @@ local function FillRowTooltip(tip, e)
     tip:AddLine(string.format("Your balance: %s now, %s after the packs open.", T.Count(e.before), T.Count(e.after)),
       1, 1, 1, true)
   end
-end
-
-local function RowTooltip(row)
-  local e = row.entry
-  if not e then return end
-  GameTooltip:SetOwner(row, "ANCHOR_RIGHT")
-  FillRowTooltip(GameTooltip, e)
-  GameTooltip:Show()
 end
 
 local function BuildRow(host)
@@ -128,8 +120,11 @@ local function BuildRow(host)
   row.Balance:SetJustifyH("RIGHT")
   local gray = U.Colors.LIGHT_GRAY
   row.Balance:SetTextColor(gray[1], gray[2], gray[3])
-  row:SetScript("OnEnter", RowTooltip)
-  row:SetScript("OnLeave", function(self) if GameTooltip:IsOwned(self) then GameTooltip:Hide() end end)
+  -- A row takes the mouse only while it holds an entry (FillRows), so the
+  -- tooltip always has one to show
+  UI.AddDynamicTooltip(row, function(tip, self)
+    if self.entry then FillRowTooltip(tip, self.entry) end
+  end)
   return row
 end
 
@@ -168,7 +163,7 @@ local function Build(host)
   end
   page.More = Line(host, U.Fonts.SMALL)
   page.More:SetPoint("TOPLEFT", page.Scroll, "BOTTOMLEFT", 4, -2)
-  page.More:SetTextColor(0.65, 0.65, 0.65)
+  page.More:SetTextColor(unpack(U.Colors.LABEL_GRAY))
   -- What you spend and receive, as aligned rows under a small heading
   page.Rows = CreateFrame("Frame", nil, host)
   page.Rows:SetHeight(HEAD_H)

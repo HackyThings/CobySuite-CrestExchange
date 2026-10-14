@@ -15,6 +15,14 @@ CobysCrestExchange.Data = CobysCrestExchange.Data or {}
 
 CobysCrestExchange.Data.Changelog = {
   {
+    version = "1.0.2",
+    title = "Patch 12.1.5",
+    date = "2026-10-13",
+    changed = {
+      "Updated for patch 12.1.5",
+    },
+  },
+  {
     version = "1.0.1",
     title = "A newer version notice and safer plans",
     date = "2026-10-11",

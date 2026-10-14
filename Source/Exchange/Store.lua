@@ -36,9 +36,7 @@ local MAX_CAPTURE = 20000
 
 local S = { data = nil, readOnly = false, charKey = nil, seasonKey = nil }
 
-local function Whole(n)
-  return U.IsFiniteNumber(n) and n >= 0 and n == math.floor(n)
-end
+local Whole = U.IsWholeNumber
 
 local function PruneOldest(map, limit, stampField)
   local keys = {}

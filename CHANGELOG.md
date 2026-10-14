@@ -4,6 +4,12 @@ All notable changes to Coby's Crest Exchange are documented here. Format follows
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-10-13
+
+### Changed
+
+- Updated for World of Warcraft patch 12.1.5.
+
 ## [1.0.1] - 2026-10-11
 
 ### Added

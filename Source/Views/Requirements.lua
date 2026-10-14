@@ -331,7 +331,7 @@ end
 -- with what exactly is missing (the overview's ladder links use both)
 -------------------------------------------------------------------------------
 local TIP_SLOTS = 4
-local RED, WHITE, GRAY = U.Colors.WARNING_RED, U.Colors.HIGHLIGHT_WHITE, { 0.6, 0.6, 0.6 }
+local RED, WHITE, GRAY = U.Colors.WARNING_RED, U.Colors.HIGHLIGHT_WHITE, U.Colors.LABEL_GRAY
 
 local function Line(tip, text, c) tip:AddLine(text, c[1], c[2], c[3], true) end
 

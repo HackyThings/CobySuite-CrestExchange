@@ -63,9 +63,7 @@ function Text.ScrollMost(shown, cardHeight, viewHeight)
   return math.max(0, shown * cardHeight - viewHeight)
 end
 
-function Text.Plural(n, one, many)
-  return (n == 1) and one or many
-end
+Text.Plural = U.Plural
 
 function Text.Packs(n)
   return Text.Count(n) .. " " .. Text.Plural(n, "pack", "packs")
@@ -79,9 +77,7 @@ end
 -- Tier colors follow the item quality colors of the tracks
 function Text.TierColor(season, tierKey)
   local tier = season and Seasons.Tier(season, tierKey)
-  local color = tier and ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[tier.quality]
-  if color and color.hex then return color.hex:gsub("^|c", ""):sub(3) end
-  return "FFFFFF"
+  return U.QualityHex(tier and tier.quality)
 end
 
 function Text.TierLabel(season, tierKey)

@@ -23,9 +23,7 @@ CobysCrestExchange.Ledger = Ledger
 
 local U = CobySuite_CobysCrestExchange.Utilities
 
-local function Whole(n)
-  return U.IsFiniteNumber(n) and n >= 0 and n == math.floor(n)
-end
+local Whole = U.IsWholeNumber
 
 local counter = 0
 function Ledger.NewOrder(q, fields)

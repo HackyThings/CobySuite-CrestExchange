@@ -34,20 +34,13 @@ end
 -------------------------------------------------------------------------------
 -- Identity
 -------------------------------------------------------------------------------
-local function ParseCreatureID(guid)
-  if type(guid) ~= "string" then return nil end
-  local kind = guid:match("^(%a+)%-")
-  if kind ~= "Creature" and kind ~= "Vehicle" then return nil end
-  local id = select(6, strsplit("-", guid))
-  return tonumber(id)
-end
-Merchant._ParseCreatureID = ParseCreatureID
+Merchant._ParseCreatureID = U.NpcIDFromGUID
 
 -- { npcID, isExchange, vendorName, inInstance }
 function Merchant.Identify(season)
   local guid = Seams.Call("NpcGUID")
   local npcID = guid and Seams.Call("CreatureID", guid)
-  if not Num(npcID) then npcID = ParseCreatureID(guid) end
+  if not Num(npcID) then npcID = U.NpcIDFromGUID(guid) end
   local vendorName = season and npcID and season.vendorNPCs[npcID] or nil
   return {
     npcID = npcID,
@@ -69,11 +62,11 @@ local function ReadCosts(index)
     if not value then
       complete = false
     elseif type(link) == "string" then
-      local currencyID = Seams.Call("CurrencyIDFromLink", link) or tonumber(link:match("currency:(%d+)"))
+      local currencyID = Seams.Call("CurrencyIDFromLink", link) or U.IDFromLink(link, "currency")
       if currencyName or currencyID then
         costs[#costs + 1] = { kind = "currency", id = currencyID, amount = value }
       else
-        costs[#costs + 1] = { kind = "item", id = tonumber(link:match("item:(%d+)")), amount = value }
+        costs[#costs + 1] = { kind = "item", id = U.IDFromLink(link), amount = value }
       end
     else
       complete = false

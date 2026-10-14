@@ -17,6 +17,8 @@ local T = Views.Text
 local UI = CobySuite_CobysCrestExchange.UI
 local U = CobySuite_CobysCrestExchange.Utilities
 local GOLD = U.Colors.STATUS_GOLD
+local GRAY_R, GRAY_G, GRAY_B = unpack(U.Colors.LIGHT_GRAY)   -- the tooltips' labels and notes
+local DIM_R, DIM_G, DIM_B = unpack(U.Colors.LABEL_GRAY)     -- a tooltip's quieter note
 local Currency = CobysCrestExchange.Currency
 local Eligibility = CobysCrestExchange.Eligibility
 local E = CobysCrestExchange.Events
@@ -36,13 +38,13 @@ local function TileTooltip(tip, tierKey)
   local t = ctx.obs.tiers and ctx.obs.tiers[tierKey]
   if not t then return end
   tip:AddLine(T.Currency(ctx.season, tierKey))
-  tip:AddDoubleLine("Balance", T.Count(t.currency.ok and t.currency.quantity or nil), 0.8, 0.8, 0.8, 1, 1, 1)
+  tip:AddDoubleLine("Balance", T.Count(t.currency.ok and t.currency.quantity or nil), GRAY_R, GRAY_G, GRAY_B, 1, 1, 1)
   local room = t.room
   if room.kind == "none" then
     -- Task #297: a lifted season cap reads as the earned total over the infinity sign
-    if not T.NoSeasonCapLines(t, function(label, value) tip:AddDoubleLine(label, value, 0.8, 0.8, 0.8, 1, 1, 1) end,
-        function(text) tip:AddLine(text, 0.8, 0.8, 0.8, true) end) then
-      tip:AddLine("No cap on this tier right now.", 0.8, 0.8, 0.8, true)
+    if not T.NoSeasonCapLines(t, function(label, value) tip:AddDoubleLine(label, value, GRAY_R, GRAY_G, GRAY_B, 1, 1, 1) end,
+        function(text) tip:AddLine(text, GRAY_R, GRAY_G, GRAY_B, true) end) then
+      tip:AddLine("No cap on this tier right now.", GRAY_R, GRAY_G, GRAY_B, true)
     end
   elseif room.kind == "unknown" then
     tip:AddLine("The game isn't reporting this tier's cap.", U.Colors.CAUTION_ORANGE[1], U.Colors.CAUTION_ORANGE[2], U.Colors.CAUTION_ORANGE[3], true)
@@ -52,36 +54,36 @@ local function TileTooltip(tip, tierKey)
     if room.season ~= nil then
       local seasonUsed = c.useTotalEarned and c.totalEarned or c.quantity
       tip:AddDoubleLine(c.useTotalEarned and "Season earned" or "Held",
-        T.Count(seasonUsed) .. "/" .. T.Count(c.maxQuantity), 0.8, 0.8, 0.8, 1, 1, 1)
+        T.Count(seasonUsed) .. "/" .. T.Count(c.maxQuantity), GRAY_R, GRAY_G, GRAY_B, 1, 1, 1)
     end
     if room.season == nil then
       -- Only the weekly cap is left: the season's is lifted
-      T.NoSeasonCapLines(t, function(label, value) tip:AddDoubleLine(label, value, 0.8, 0.8, 0.8, 1, 1, 1) end,
-        function(text) tip:AddLine(text, 0.8, 0.8, 0.8, true) end)
+      T.NoSeasonCapLines(t, function(label, value) tip:AddDoubleLine(label, value, GRAY_R, GRAY_G, GRAY_B, 1, 1, 1) end,
+        function(text) tip:AddLine(text, GRAY_R, GRAY_G, GRAY_B, true) end)
     end
     if room.weekly ~= nil then
-      tip:AddDoubleLine("Earned this week", T.Count(c.earnedThisWeek) .. "/" .. T.Count(c.maxWeekly), 0.8, 0.8, 0.8, 1, 1, 1)
+      tip:AddDoubleLine("Earned this week", T.Count(c.earnedThisWeek) .. "/" .. T.Count(c.maxWeekly), GRAY_R, GRAY_G, GRAY_B, 1, 1, 1)
     end
-    tip:AddDoubleLine("Room for more crests", T.Count(room.raw), 0.8, 0.8, 0.8, 1, 1, 1)
+    tip:AddDoubleLine("Room for more crests", T.Count(room.raw), GRAY_R, GRAY_G, GRAY_B, 1, 1, 1)
     if t.packs > 0 then
-      tip:AddDoubleLine("In unopened packs", T.Count(t.packedCrests) .. " (" .. T.Packs(t.packs) .. ")", 0.8, 0.8, 0.8, 1, 1, 1)
+      tip:AddDoubleLine("In unopened packs", T.Count(t.packedCrests) .. " (" .. T.Packs(t.packs) .. ")", GRAY_R, GRAY_G, GRAY_B, 1, 1, 1)
       tip:AddDoubleLine("Room after unopened packs", T.Count(Currency.Uncommitted(room, t.packedCrests, 0)),
-        0.8, 0.8, 0.8, 1, 1, 1)
-      tip:AddLine("The faint band shows unopened crests that fit under this cap.", 0.65, 0.65, 0.65, true)
+        GRAY_R, GRAY_G, GRAY_B, 1, 1, 1)
+      tip:AddLine("The faint band shows unopened crests that fit under this cap.", DIM_R, DIM_G, DIM_B, true)
     end
     if room.season ~= nil and room.weekly ~= nil then
-      tip:AddLine("Both limits apply. The meter shows the one with less room.", 0.8, 0.8, 0.8, true)
+      tip:AddLine("Both limits apply. The meter shows the one with less room.", GRAY_R, GRAY_G, GRAY_B, true)
     end
     -- What frees each cap
     if room.season ~= nil then
       tip:AddLine(c.useTotalEarned and "Spending crests does not lower the season total. Season caps usually rise at weekly resets."
-        or "Spending some makes room again.", 0.8, 0.8, 0.8, true)
+        or "Spending some makes room again.", GRAY_R, GRAY_G, GRAY_B, true)
     end
-    if room.weekly ~= nil then tip:AddLine("The weekly total resets each week.", 0.8, 0.8, 0.8, true) end
+    if room.weekly ~= nil then tip:AddLine("The weekly total resets each week.", GRAY_R, GRAY_G, GRAY_B, true) end
   end
   if room.kind == "none" or room.kind == "unknown" then
     if t.packs > 0 then
-      tip:AddDoubleLine("In unopened packs", T.Count(t.packedCrests) .. " (" .. T.Packs(t.packs) .. ")", 0.8, 0.8, 0.8, 1, 1, 1)
+      tip:AddDoubleLine("In unopened packs", T.Count(t.packedCrests) .. " (" .. T.Packs(t.packs) .. ")", GRAY_R, GRAY_G, GRAY_B, 1, 1, 1)
     end
   end
   tip:AddLine(" ")
@@ -134,7 +136,7 @@ local function Build(host)
   page.Title:SetPoint("TOPLEFT", 4, -4)
   page.Hint = host:CreateFontString(nil, "OVERLAY", U.Fonts.DATA)
   page.Hint:SetPoint("TOPRIGHT", -4, -8)
-  page.Hint:SetTextColor(0.6, 0.6, 0.6)
+  page.Hint:SetTextColor(unpack(U.Colors.LABEL_GRAY))
   page.Hint:SetText("Click a tier to get more")
   page.ladder = Views.Ladder.Create(host, { top = -28, nodeH = 40, gap = 16, onClick = OnTile })
   for _, node in ipairs(page.ladder.nodes) do

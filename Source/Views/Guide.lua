@@ -13,10 +13,6 @@ local Views = CobysCrestExchange.Views
 local Guide = {}
 Views.Guide = Guide
 
-local U = CobySuite_CobysCrestExchange.Utilities
-
-local function Key(text) return U.WrapColor(U.Colors.HELP_COMMAND, text) end
-
 local T = CobySuite_CobysCrestExchange.UI.GuideText
 
 Guide.SECTIONS = {
@@ -113,7 +109,7 @@ local window = CobySuite_CobysCrestExchange.UI.CreateGuideWindow({
   title = CobySuite_CobysCrestExchange.Utilities.WrapColor(CobysCrestExchange.BRAND_COLOR, "Coby's Crest Exchange") .. " Guide",
   icon = CobysCrestExchange.ICON,
   intro = "New here? Start with the first section. Click any heading to open or close it.",
-  footer = "Open this guide any time with " .. Key("/ce guide"),
+  footer = "Open this guide any time with " .. T.Key("/ce guide"),
   sections = Guide.SECTIONS,
   persist = { svTable = function() return COBYS_CREST_EXCHANGE_WINDOW_STATE end, key = "guideWindow" },
 })

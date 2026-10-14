@@ -68,12 +68,10 @@ local base = CobySuite_CobysCrestExchange.Config.New({
     Config.MigrateOpening(saved, COBYS_CREST_EXCHANGE_WINDOW_STATE)
   end,
   debug = CobysCrestExchange.Debug,
-  onSet = function(name, old, value)
-    CobysCrestExchange.EventBus:Fire(CobysCrestExchange.Events.ConfigChanged, name, value, old)
-  end,
-  onReset = function()
-    CobysCrestExchange.EventBus:Fire(CobysCrestExchange.Events.ConfigChanged)
-  end,
+  -- Set fires ConfigChanged (name, value, old) and Reset fires it alone
+  bus = CobysCrestExchange.EventBus,
+  event = CobysCrestExchange.Events.ConfigChanged,
+  ensureTables = { "COBYS_CREST_EXCHANGE_WINDOW_STATE" },
 })
 
 -- Install onto CobysCrestExchange.Config namespace
@@ -90,10 +88,6 @@ Config.Reset         = base.Reset
 ---------------------------------------------------------------------------
 function Config.InitializeData()
   base.InitializeData()
-
-  if type(COBYS_CREST_EXCHANGE_WINDOW_STATE) ~= "table" then
-    COBYS_CREST_EXCHANGE_WINDOW_STATE = {}
-  end
 
   CobysCrestExchange.Debug.Log("CONFIG", "Config initialized")
 end

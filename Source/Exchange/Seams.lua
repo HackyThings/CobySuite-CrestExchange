@@ -6,9 +6,10 @@
 -- Tests.Override(ctx, Seams, "NumItems", fn). Nothing outside this file names
 -- a merchant, currency, bag, achievement or quest API directly.
 --
--- Seams.Call(name, ...) runs one wrapper under pcall and returns nil when it
--- errors or when a returned value is secret (issecretvalue), so callers never
--- compare or index a secret. Wrappers that return tables are checked field by
+-- Seams.Call(name, ...) runs one wrapper under pcall (CobySuite's SafeCall,
+-- keeping four results) and returns nil when it errors or when a returned
+-- value is secret (issecretvalue), so callers never compare or index a
+-- secret. Wrappers that return tables are checked field by
 -- field by their callers with Seams.IsSecret, as Blizzard's structs can carry
 -- secret fields individually.
 -------------------------------------------------------------------------------
@@ -20,17 +21,8 @@ function Seams.IsSecret(value)
   return CobySuite_CobysCrestExchange.Utilities.IsSecret(value)
 end
 
-local function AnySecret(a, b, c, d)
-  local IsSecret = Seams.IsSecret
-  return IsSecret(a) or IsSecret(b) or IsSecret(c) or IsSecret(d)
-end
-
 function Seams.Call(name, ...)
-  local fn = Seams[name]
-  if type(fn) ~= "function" then return nil end
-  local ok, a, b, c, d = pcall(fn, ...)
-  if not ok or AnySecret(a, b, c, d) then return nil end
-  return a, b, c, d
+  return CobySuite_CobysCrestExchange.Utilities.SafeCall(Seams.IsSecret, 4, Seams[name], ...)
 end
 
 -------------------------------------------------------------------------------
@@ -47,9 +39,7 @@ function Seams.Interface() return (select(4, GetBuildInfo())) end
 function Seams.Build() local version, build = GetBuildInfo(); return version, build end
 function Seams.PlayerGUID() return UnitGUID("player") end
 function Seams.PlayerName()
-  local name, realm = UnitFullName("player")
-  if name and realm and realm ~= "" then return name .. "-" .. realm end
-  return name
+  return CobySuite_CobysCrestExchange.Utilities.CanonicalName(UnitFullName("player"))
 end
 function Seams.Locale() return GetLocale() end
 

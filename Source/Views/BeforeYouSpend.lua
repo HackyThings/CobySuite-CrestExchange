@@ -73,7 +73,7 @@ local function BuildTracks(host, page)
   page.TrackNote:SetPoint("TOPLEFT", page.TracksHead, "BOTTOMLEFT", 2, -6 - MAX_TRACKS * ROW_H)
   page.TrackNote:SetPoint("RIGHT", host, "RIGHT", -6, 0)
   page.TrackNote:SetJustifyH("LEFT")
-  page.TrackNote:SetTextColor(0.65, 0.65, 0.65)
+  page.TrackNote:SetTextColor(unpack(U.Colors.LABEL_GRAY))
 end
 
 local KEEP_COL = 74   -- one tier's column: its name over its icon and box
@@ -90,7 +90,7 @@ local function BuildReserves(host, page)
   page.KeepNote:SetPoint("BOTTOMLEFT", row, "TOPLEFT", 2, 6)
   page.KeepNote:SetPoint("BOTTOMRIGHT", row, "TOPRIGHT", -4, 6)
   page.KeepNote:SetJustifyH("LEFT")
-  page.KeepNote:SetTextColor(0.65, 0.65, 0.65)
+  page.KeepNote:SetTextColor(unpack(U.Colors.LABEL_GRAY))
   page.KeepNote:SetText("Max and exchanges keep at least these. Leaving a box saves it.")
   page.KeepHead = Header(host, "common-icon-checkmark", "Keep at least")
   page.KeepHead:SetPoint("BOTTOMLEFT", page.KeepNote, "TOPLEFT", 0, 6)
